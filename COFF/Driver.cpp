@@ -64,52 +64,50 @@ public:
 };
 } // anonymous namespace
 
-static ErrorOr<std::unique_ptr<COFFObjectFile>> readFile(StringRef path) {
-  ErrorOr<std::unique_ptr<MemoryBuffer>> mbOrErr = MemoryBuffer::getFile(path);
-  if (std::error_code ec = mbOrErr.getError())
-    return ec;
-  std::unique_ptr<MemoryBuffer> mb = std::move(mbOrErr.get());
-  auto binOrErr = llvm::object::createBinary(mb->getMemBufferRef());
-  if (std::error_code ec = binOrErr.getError())
-    return ec;
-  std::unique_ptr<llvm::object::Binary> bin = std::move(binOrErr.get());
-  if (isa<COFFObjectFile>(bin.get()))
-    return lld::make_dynamic_error_code(Twine(path) + " is not a COFF file.");
-  return std::unique_ptr<COFFObjectFile>(cast<COFFObjectFile>(bin.release()));
+static ErrorOr<std::unique_ptr<COFFObjectFile>> readFile(StringRef Path) {
+  ErrorOr<std::unique_ptr<MemoryBuffer>> MBOrErr = MemoryBuffer::getFile(Path);
+  if (std::error_code EC = MBOrErr.getError())
+    return EC;
+  std::unique_ptr<MemoryBuffer> MB = std::move(MBOrErr.get());
+  auto BinOrErr = llvm::object::createBinary(MB->getMemBufferRef());
+  if (std::error_code EC = BinOrErr.getError())
+    return EC;
+  std::unique_ptr<llvm::object::Binary> Bin = std::move(BinOrErr.get());
+  if (isa<COFFObjectFile>(Bin.get()))
+    return lld::make_dynamic_error_code(Twine(Path) + " is not a COFF file.");
+  return std::unique_ptr<COFFObjectFile>(cast<COFFObjectFile>(Bin.release()));
 }
 
 namespace lld {
 
-bool linkCOFF(int argc, const char *argv[]) {
-  std::unique_ptr<llvm::opt::InputArgList> parsedArgs;
-  COFFOptTable table;
-  unsigned missingIndex;
-  unsigned missingCount;
-  parsedArgs.reset(table.ParseArgs(&argv[1], &argv[argc],
-                                   missingIndex, missingCount));
-  if (missingCount) {
+bool linkCOFF(int Argc, const char *Argv[]) {
+  COFFOptTable Table;
+  unsigned MissingIndex;
+  unsigned MissingCount;
+  std::unique_ptr<llvm::opt::InputArgList> Args(
+    Table.ParseArgs(&Argv[1], &Argv[Argc], MissingIndex, MissingCount));
+  if (MissingCount) {
     llvm::errs() << "error: missing arg value for '"
-		 << parsedArgs->getArgString(missingIndex) << "' expected "
-		 << missingCount << " argument(s).\n";
+		 << Args->getArgString(MissingIndex) << "' expected "
+		 << MissingCount << " argument(s).\n";
     return false;
   }
 
-  for (auto *arg : parsedArgs->filtered(OPT_UNKNOWN)) {
+  for (auto *Arg : Args->filtered(OPT_UNKNOWN)) {
     llvm::errs() << "warning: ignoring unknown argument: "
-		 << arg->getSpelling() << "\n";
+		 << Arg->getSpelling() << "\n";
   }
 
-  std::vector<std::unique_ptr<COFFObjectFile>> files;
-  for (auto *arg : parsedArgs->filtered(OPT_INPUT)) {
-    StringRef path = arg->getValue();
-    ErrorOr<std::unique_ptr<COFFObjectFile>> file = readFile(arg->getValue());
-    if (std::error_code ec = file.getError()) {
-      llvm::errs() << "Cannot open " << path << ": " << ec.message() << "\n";
+  std::vector<std::unique_ptr<COFFObjectFile>> Files;
+  for (auto *Arg : Args->filtered(OPT_INPUT)) {
+    StringRef Path = Arg->getValue();
+    ErrorOr<std::unique_ptr<COFFObjectFile>> File = readFile(Arg->getValue());
+    if (std::error_code EC = File.getError()) {
+      llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";
       continue;
     }
-    files.push_back(std::move(file.get()));
+    Files.push_back(std::move(File.get()));
   }
-
   return true;
 }
 
