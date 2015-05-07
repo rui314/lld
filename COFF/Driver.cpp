@@ -23,12 +23,7 @@
 #include <memory>
 #include <sstream>
 
-using llvm::ErrorOr;
-using llvm::MemoryBuffer;
-using llvm::StringRef;
-using llvm::Twine;
-using llvm::isa;
-using llvm::cast;
+using namespace llvm;
 using llvm::object::COFFObjectFile;
 
 // Create enum with OPT_xxx values for each option in Options.td
@@ -71,10 +66,11 @@ static ErrorOr<std::unique_ptr<COFFObjectFile>> readFile(StringRef Path) {
     return EC;
   std::unique_ptr<MemoryBuffer> MB = std::move(MBOrErr.get());
   auto BinOrErr = llvm::object::createBinary(MB->getMemBufferRef());
+  MB.release(); // leak
   if (std::error_code EC = BinOrErr.getError())
     return EC;
   std::unique_ptr<llvm::object::Binary> Bin = std::move(BinOrErr.get());
-  if (isa<COFFObjectFile>(Bin.get()))
+  if (!isa<COFFObjectFile>(Bin.get()))
     return lld::make_dynamic_error_code(Twine(Path) + " is not a COFF file.");
   return std::unique_ptr<COFFObjectFile>(cast<COFFObjectFile>(Bin.release()));
 }
