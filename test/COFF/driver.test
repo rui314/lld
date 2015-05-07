@@ -4,3 +4,9 @@
 # RUN: lld -flavor link2 -xyz >& %t.log
 # RUN: FileCheck -check-prefix=UNK %s < %t.log
 UNK: warning: ignoring unknown argument: -xyz
+
+# RUN: lld -flavor link2 nosuchfile.obj >& %t.log
+# RUN: FileCheck -check-prefix=MISSING %s < %t.log
+MISSING: Cannot open nosuchfile.obj: no such file or directory
+
+# RUN: lld -flavor link2 %p/Inputs/ret42.obj

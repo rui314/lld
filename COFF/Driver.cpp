@@ -9,17 +9,26 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Option/Option.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
+#include "lld/Core/Error.h"
 #include <memory>
 #include <sstream>
 
+using llvm::ErrorOr;
+using llvm::MemoryBuffer;
+using llvm::StringRef;
 using llvm::Twine;
+using llvm::isa;
+using llvm::cast;
+using llvm::object::COFFObjectFile;
 
 // Create enum with OPT_xxx values for each option in Options.td
 enum {
@@ -55,6 +64,20 @@ public:
 };
 } // anonymous namespace
 
+static ErrorOr<std::unique_ptr<COFFObjectFile>> readFile(StringRef path) {
+  ErrorOr<std::unique_ptr<MemoryBuffer>> mbOrErr = MemoryBuffer::getFile(path);
+  if (std::error_code ec = mbOrErr.getError())
+    return ec;
+  std::unique_ptr<MemoryBuffer> mb = std::move(mbOrErr.get());
+  auto binOrErr = llvm::object::createBinary(mb->getMemBufferRef());
+  if (std::error_code ec = binOrErr.getError())
+    return ec;
+  std::unique_ptr<llvm::object::Binary> bin = std::move(binOrErr.get());
+  if (isa<COFFObjectFile>(bin.get()))
+    return lld::make_dynamic_error_code(Twine(path) + " is not a COFF file.");
+  return std::unique_ptr<COFFObjectFile>(cast<COFFObjectFile>(bin.release()));
+}
+
 namespace lld {
 
 bool linkCOFF(int argc, const char *argv[]) {
@@ -76,8 +99,17 @@ bool linkCOFF(int argc, const char *argv[]) {
 		 << arg->getSpelling() << "\n";
   }
 
-  for (auto *arg : parsedArgs->filtered(OPT_INPUT))
-    llvm::dbgs() << arg->getValue() << "\n";
+  std::vector<std::unique_ptr<COFFObjectFile>> files;
+  for (auto *arg : parsedArgs->filtered(OPT_INPUT)) {
+    StringRef path = arg->getValue();
+    ErrorOr<std::unique_ptr<COFFObjectFile>> file = readFile(arg->getValue());
+    if (std::error_code ec = file.getError()) {
+      llvm::errs() << "Cannot open " << path << ": " << ec.message() << "\n";
+      continue;
+    }
+    files.push_back(std::move(file.get()));
+  }
+
   return true;
 }
 
