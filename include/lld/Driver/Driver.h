@@ -140,6 +140,9 @@ private:
   WinLinkDriver() = delete;
 };
 
+/// Driver for Windows 'link.exe' command line options
+bool linkCOFF(int argc, const char *argv[]);
+
 /// Driver for lld unit tests
 class CoreDriver : public Driver {
 public:

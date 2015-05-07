@@ -1,0 +1,2 @@
+# RUN: lld -flavor link2
+# RUN: not lld -flavor link3
