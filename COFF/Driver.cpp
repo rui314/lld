@@ -105,7 +105,7 @@ bool linkCOFF(int Argc, const char *Argv[]) {
     }
     Files.push_back(std::move(File.get()));
   }
-  coff::write(Files);
+  coff::write("a.exe", Files);
   return true;
 }
 
