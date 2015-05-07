@@ -1,2 +1,6 @@
 # RUN: lld -flavor link2
 # RUN: not lld -flavor link3
+
+# RUN: lld -flavor link2 -xyz >& %t.log
+# RUN: FileCheck -check-prefix=UNK %s < %t.log
+UNK: warning: ignoring unknown argument: -xyz
