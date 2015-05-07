@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "Writer.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
@@ -108,6 +109,7 @@ bool linkCOFF(int Argc, const char *Argv[]) {
     }
     Files.push_back(std::move(File.get()));
   }
+  coff::write(Files);
   return true;
 }
 
