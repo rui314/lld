@@ -46,7 +46,7 @@ void Writer::groupSections() {
 void Writer::assignAddresses() {
   uint64_t Off = 0;
   for (SectionGroup &Group : SectionGroups) {
-    Off = RoundUpToAlignment(Off, 4096);
+    Off = RoundUpToAlignment(Off, PageSize);
     Off = RoundUpToAlignment(Off, getSectionAlignment(Group.Sections.front()->Sec));
     Group.FileOffset = Off;
     Group.RVA = Off;
@@ -57,7 +57,7 @@ void Writer::assignAddresses() {
       Off += Sec->getSectionSize();
     }
   }
-  SectionTotalSize = RoundUpToAlignment(Off, 4096);
+  SectionTotalSize = RoundUpToAlignment(Off, PageSize);
 
   for (auto I = SectionGroups.begin(), E = SectionGroups.end() - 1; I < E; ++I) {
     SectionGroup &Curr = *I;
@@ -87,7 +87,8 @@ void Writer::writeHeader() {
   P += sizeof(coff_file_header);
   COFF->Machine = llvm::COFF::IMAGE_FILE_MACHINE_AMD64;
   COFF->NumberOfSections = SectionGroups.size();
-  COFF->Characteristics = llvm::COFF::IMAGE_FILE_EXECUTABLE_IMAGE;
+  COFF->Characteristics = (llvm::COFF::IMAGE_FILE_EXECUTABLE_IMAGE
+			   | llvm::COFF::IMAGE_FILE_RELOCS_STRIPPED);
   COFF->SizeOfOptionalHeader = sizeof(pe32plus_header)
     + sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
 
@@ -95,12 +96,15 @@ void Writer::writeHeader() {
   PE = reinterpret_cast<pe32plus_header *>(P);
   P += sizeof(pe32plus_header);
   PE->Magic = llvm::COFF::PE32Header::PE32_PLUS;
-  PE->ImageBase = 0x400000;
+  PE->ImageBase = 0x140000000;
   PE->SectionAlignment = SectionAlignment;
-  PE->FileAlignment = 512;
+  PE->FileAlignment = FileAlignment;
+  PE->MajorOperatingSystemVersion = 6;
+  PE->MajorSubsystemVersion = 6;
+  PE->SizeOfImage = SectionTotalSize;
   PE->SizeOfStackReserve = 1024 * 1024;
   PE->SizeOfStackCommit = 4096;
-  PE->SizeOfHeapReserve = 1024 * 1024;;
+  PE->SizeOfHeapReserve = 1024 * 1024;
   PE->SizeOfHeapCommit = 4096;
   PE->NumberOfRvaAndSize = NumberfOfDataDirectory;
 
@@ -111,12 +115,12 @@ void Writer::writeHeader() {
   // Initialize SectionTable pointer
   SectionTable = reinterpret_cast<coff_section *>(P);
   PE->SizeOfHeaders = RoundUpToAlignment(
-    HeaderSize + sizeof(coff_section) * SectionGroups.size(), 4096);
+    HeaderSize + sizeof(coff_section) * SectionGroups.size(), FileAlignment);
 }
 
 void Writer::open() {
   uint64_t Size = RoundUpToAlignment(
-    HeaderSize + sizeof(coff_section) * SectionGroups.size(), 4096);
+    HeaderSize + sizeof(coff_section) * SectionGroups.size(), PageSize);
   Size += SectionTotalSize;
   if (auto EC = FileOutputBuffer::create(
 	Path, Size, Buffer, FileOutputBuffer::F_executable)) {
@@ -135,12 +139,23 @@ void Writer::writeSections() {
   }
 }
 
+void Writer::backfillHeaders() {
+  for (SectionGroup &Group : SectionGroups) {
+    if (Group.Name == ".text") {
+      PE->SizeOfCode = Group.Size;
+      PE->BaseOfCode = Group.RVA;
+      return;
+    }
+  }
+}
+
 void Writer::write() {
   groupSections();
   assignAddresses();
   open();
   writeHeader();
   writeSections();
+  backfillHeaders();
   Buffer->commit();
 }
 

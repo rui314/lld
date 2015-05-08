@@ -63,6 +63,7 @@ private:
   void writeHeader();
   void groupSections();
   void assignAddresses();
+  void backfillHeaders();
   void writeSections();
 
   llvm::StringRef Path;
@@ -77,6 +78,8 @@ private:
 
   const int DOSStubSize = 64;
   const int NumberfOfDataDirectory = 16;
+  const int PageSize = 4096;
+  const int FileAlignment = 512;
   const int HeaderSize = DOSStubSize + sizeof(llvm::COFF::PEMagic)
     + sizeof(llvm::object::coff_file_header)
     + sizeof(llvm::object::pe32plus_header)
