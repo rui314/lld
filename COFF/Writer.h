@@ -32,6 +32,7 @@ public:
   llvm::object::COFFObjectFile *File;
   const llvm::object::coff_section *Sec;
   llvm::StringRef Name;
+  uint64_t FileOffset = 0;
 };
 
 typedef std::vector<std::unique_ptr<Section>> SectionList;
