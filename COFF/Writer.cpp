@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Writer.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/FileOutputBuffer.h"
@@ -30,6 +31,41 @@ static StringRef stripDollar(StringRef Name) {
   return Name.substr(0, Name.find('$'));
 }
 
+ArrayRef<uint8_t> Section::getContent() const {
+  ArrayRef<uint8_t> Res;
+  if (auto EC = File->getSectionContents(Header, Res))
+    llvm::errs() << "getSectionContents failed: " << EC.message() << "\n";
+  return Res;
+}
+
+void OutputSection::addSection(Section *Sec) {
+  uint64_t Align = getSectionAlignment(Sec->Header);
+  Header.VirtualSize = RoundUpToAlignment(Header.VirtualSize, Align);
+  Header.SizeOfRawData = RoundUpToAlignment(Header.SizeOfRawData, Align);
+  Sec->RVA = Header.VirtualSize;
+  Sec->FileOffset = Header.SizeOfRawData;
+  Header.VirtualSize += Sec->Header->SizeOfRawData;
+  Header.SizeOfRawData += Sec->Header->SizeOfRawData;
+  Sections.push_back(Sec);
+}
+
+void OutputSection::setRVA(uint64_t RVA) {
+  Header.VirtualAddress = RVA;
+  for (Section *Sec : Sections)
+    Sec->RVA += RVA;
+}
+
+void OutputSection::setFileOffset(uint64_t Off) {
+  Header.PointerToRawData = Off;
+  for (Section *Sec : Sections)
+    Sec->FileOffset += Off;
+}
+
+void OutputSection::finalize() {
+  strncpy(Header.Name, Name.data(), std::min(Name.size(), size_t(8)));
+  Header.VirtualSize = RoundUpToAlignment(Header.VirtualSize, 4096);
+}
+
 void Writer::groupSections() {
   StringRef Last = "";
   for (std::unique_ptr<Section> &Sec : Sections) {
@@ -38,34 +74,24 @@ void Writer::groupSections() {
       OutputSections.emplace_back();
     OutputSection &Out = OutputSections.back();
     Out.Name = Name;
-    Out.Sections.push_back(Sec.get());
+    Out.addSection(Sec.get());
     Last = Name;
   }
+  EndOfSectionTable = RoundUpToAlignment(
+    HeaderSize + sizeof(coff_section) * OutputSections.size(), PageSize);
 }
 
 void Writer::assignAddresses() {
-  uint64_t Off = 0;
+  uint64_t RVA = 0x1000;
+  uint64_t FileOff = EndOfSectionTable;
+  uint64_t InitFileOff = FileOff;
   for (OutputSection &Out : OutputSections) {
-    Off = RoundUpToAlignment(Off, PageSize);
-    Off = RoundUpToAlignment(Off, getSectionAlignment(Out.Sections.front()->Header));
-    Out.Header.PointerToRawData = Off;
-    Out.Header.VirtualAddress = Off;
-    for (Section *Sec : Out.Sections) {
-      Off = RoundUpToAlignment(Off, getSectionAlignment(Sec->Header));
-      Sec->FileOffset = Off;
-      Sec->RVA = Off;
-      Off += Sec->getSectionSize();
-    }
+    Out.setRVA(RVA);
+    Out.setFileOffset(FileOff);
+    RVA += RoundUpToAlignment(Out.Header.VirtualSize, PageSize);
+    FileOff += RoundUpToAlignment(Out.Header.SizeOfRawData, FileAlignment);
   }
-  SectionTotalSize = RoundUpToAlignment(Off, PageSize);
-
-  for (auto I = OutputSections.begin(), E = OutputSections.end() - 1; I < E; ++I) {
-    OutputSection &Curr = *I;
-    OutputSection &Next = *(I + 1);
-    Curr.Header.VirtualSize = Next.Header.PointerToRawData - Curr.Header.PointerToRawData;
-  }
-  OutputSection &Last = OutputSections.back();
-  Last.Header.VirtualSize = SectionTotalSize - Last.Header.PointerToRawData;
+  SectionTotalSize = RoundUpToAlignment(FileOff - InitFileOff, PageSize);
 }
 
 void Writer::writeHeader() {
@@ -119,9 +145,7 @@ void Writer::writeHeader() {
 }
 
 void Writer::open() {
-  uint64_t Size = RoundUpToAlignment(
-    HeaderSize + sizeof(coff_section) * OutputSections.size(), PageSize);
-  Size += SectionTotalSize;
+  uint64_t Size = EndOfSectionTable + SectionTotalSize;
   if (auto EC = FileOutputBuffer::create(
 	Path, Size, Buffer, FileOutputBuffer::F_executable)) {
     llvm::errs() << "Failed to open " << Path << ": " << EC.message() << "\n";
@@ -133,6 +157,11 @@ void Writer::writeSections() {
   for (OutputSection &Out : OutputSections) {
     Out.finalize();
     SectionTable[Idx++] = Out.Header;
+  }
+  uint8_t *P = Buffer->getBufferStart();
+  for (std::unique_ptr<Section> &Sec : Sections) {
+    ArrayRef<uint8_t> C = Sec->getContent();
+    memcpy(P + Sec->FileOffset, C.data(), C.size());
   }
 }
 
