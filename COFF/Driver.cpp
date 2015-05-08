@@ -121,6 +121,12 @@ bool linkCOFF(int Argc, const char *Argv[]) {
     readSections(Sections, File.get());
     Files.push_back(std::move(File));
   }
+
+  if (Files.empty()) {
+    llvm::errs() << "no input files.\n";
+    return true;
+  }
+
   coff::Writer writer("a.exe");
   writer.addSections(std::move(Sections));
   writer.write();
