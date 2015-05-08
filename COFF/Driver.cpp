@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Writer.h"
+#include "lld/Core/Error.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
@@ -19,12 +20,12 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
-#include "lld/Core/Error.h"
 #include <memory>
 #include <sstream>
 
 using namespace llvm;
 using llvm::object::COFFObjectFile;
+using llvm::object::coff_section;
 
 // Create enum with OPT_xxx values for each option in Options.td
 enum {
@@ -75,6 +76,18 @@ static ErrorOr<std::unique_ptr<COFFObjectFile>> readFile(StringRef Path) {
   return std::unique_ptr<COFFObjectFile>(cast<COFFObjectFile>(Bin.release()));
 }
 
+static void readSections(lld::coff::SectionList &Result, COFFObjectFile *File) {
+  for (const auto &SectionRef : File->sections()) {
+    const coff_section *Sec = File->getCOFFSection(SectionRef);
+    StringRef Name;
+    if (auto EC = File->getSectionName(Sec, Name)) {
+      llvm::errs() << "Failed to get a section name: " << EC.message() << "\n";
+      return;
+    }
+    Result.push_back(make_unique<lld::coff::Section>(File, Sec, Name));
+  }
+}
+
 namespace lld {
 
 bool linkCOFF(int Argc, const char *Argv[]) {
@@ -96,16 +109,19 @@ bool linkCOFF(int Argc, const char *Argv[]) {
   }
 
   std::vector<std::unique_ptr<COFFObjectFile>> Files;
+  std::vector<std::unique_ptr<lld::coff::Section>> Sections;
   for (auto *Arg : Args->filtered(OPT_INPUT)) {
     StringRef Path = Arg->getValue();
-    ErrorOr<std::unique_ptr<COFFObjectFile>> File = readFile(Arg->getValue());
-    if (std::error_code EC = File.getError()) {
+    ErrorOr<std::unique_ptr<COFFObjectFile>> FileOrErr = readFile(Arg->getValue());
+    if (std::error_code EC = FileOrErr.getError()) {
       llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";
       continue;
     }
-    Files.push_back(std::move(File.get()));
+    std::unique_ptr<COFFObjectFile> File = std::move(FileOrErr.get());
+    readSections(Sections, File.get());
+    Files.push_back(std::move(File));
   }
-  coff::write("a.exe", Files);
+  coff::write("a.exe", Sections);
   return true;
 }
 

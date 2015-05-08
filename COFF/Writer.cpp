@@ -12,11 +12,14 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/FileOutputBuffer.h"
 #include "llvm/Support/raw_ostream.h"
+#include <map>
 
 using namespace llvm;
 using namespace llvm::object;
 
-void writeFile(StringRef Path) {
+typedef std::map<StringRef, std::vector<const coff_section *>> SectionMap;
+
+static void writeFile(StringRef Path, SectionMap &Map) {
   coff_file_header COFF;
   memset(&COFF, 0, sizeof(COFF));
   COFF.Machine = llvm::COFF::IMAGE_FILE_MACHINE_AMD64;
@@ -45,22 +48,10 @@ void writeFile(StringRef Path) {
 namespace lld {
 namespace coff {
 
-void write(StringRef OutputPath,
-	   std::vector<std::unique_ptr<COFFObjectFile>> &Files) {
-  if (Files.empty())
+void write(StringRef OutputPath, SectionList &Sections) {
+  if (Sections.empty())
     return;
-  COFFObjectFile *File = Files[0].get();
-  (void)File->getMachine();
-  for (const auto &SectionRef : File->sections()) {
-    const coff_section *Sec = File->getCOFFSection(SectionRef);
-    StringRef Name;
-    if (auto EC = File->getSectionName(Sec, Name)) {
-      llvm::errs() << "Failed to get a section name: " << EC.message() << "\n";
-      return;
-    }
-    llvm::dbgs() << Name << "\n";
-  }
-  writeFile(OutputPath);
+//  writeFile(OutputPath, Map);
 }
 
 } // namespace coff
