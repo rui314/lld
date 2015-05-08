@@ -28,13 +28,17 @@ namespace coff {
 
 class Section {
 public:
- Section(llvm::object::COFFObjectFile *F,
-	 const llvm::object::coff_section *S, llvm::StringRef N)
+  Section(llvm::object::COFFObjectFile *F,
+	  const llvm::object::coff_section *S, llvm::StringRef N)
     : File(F), Sec(S), Name(N) {}
+
+  uint64_t getSectionSize() const { return File->getSectionSize(Sec); }
+
   llvm::object::COFFObjectFile *File;
   const llvm::object::coff_section *Sec;
   llvm::StringRef Name;
-  uint64_t FileOffset = 0;
+  uint64_t FileOffset;
+  uint64_t RVA;
 };
 
 typedef std::vector<std::unique_ptr<Section>> SectionList;
@@ -48,6 +52,8 @@ public:
 private:
   void open();
   void writeHeader();
+  void assignAddress();
+  void writeSections();
 
   llvm::StringRef Path;
   std::unique_ptr<llvm::FileOutputBuffer> Buffer;
@@ -55,6 +61,9 @@ private:
   llvm::object::coff_file_header *COFF;
   llvm::object::pe32plus_header *PE;
   llvm::object::data_directory *DataDirectory;
+  llvm::object::coff_section *SectionTable;
+  int NumSections = 0;
+  uint64_t SectionTotalSize = 0;
 
   const int DOSStubSize = 64;
   const int NumberfOfDataDirectory = 16;
@@ -62,6 +71,7 @@ private:
     + sizeof(llvm::object::coff_file_header)
     + sizeof(llvm::object::pe32plus_header)
     + sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
+  const int SectionAlignment = 4096;
 };
 
 } // namespace pecoff
