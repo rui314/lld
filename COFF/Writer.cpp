@@ -36,21 +36,21 @@ void Writer::groupSections() {
     StringRef Name = stripDollar(Sec->Name);
     if (Name != Last)
       OutputSections.emplace_back();
-    OutputSection &Group = OutputSections.back();
-    Group.Name = Name;
-    Group.Sections.push_back(Sec.get());
+    OutputSection &Out = OutputSections.back();
+    Out.Name = Name;
+    Out.Sections.push_back(Sec.get());
     Last = Name;
   }
 }
 
 void Writer::assignAddresses() {
   uint64_t Off = 0;
-  for (OutputSection &Group : OutputSections) {
+  for (OutputSection &Out : OutputSections) {
     Off = RoundUpToAlignment(Off, PageSize);
-    Off = RoundUpToAlignment(Off, getSectionAlignment(Group.Sections.front()->Header));
-    Group.FileOffset = Off;
-    Group.RVA = Off;
-    for (Section *Sec : Group.Sections) {
+    Off = RoundUpToAlignment(Off, getSectionAlignment(Out.Sections.front()->Header));
+    Out.Header.PointerToRawData = Off;
+    Out.Header.VirtualAddress = Off;
+    for (Section *Sec : Out.Sections) {
       Off = RoundUpToAlignment(Off, getSectionAlignment(Sec->Header));
       Sec->FileOffset = Off;
       Sec->RVA = Off;
@@ -62,10 +62,10 @@ void Writer::assignAddresses() {
   for (auto I = OutputSections.begin(), E = OutputSections.end() - 1; I < E; ++I) {
     OutputSection &Curr = *I;
     OutputSection &Next = *(I + 1);
-    Curr.Size = Next.FileOffset - Curr.FileOffset;
+    Curr.Header.VirtualSize = Next.Header.PointerToRawData - Curr.Header.PointerToRawData;
   }
   OutputSection &Last = OutputSections.back();
-  Last.Size = SectionTotalSize - Last.FileOffset;
+  Last.Header.VirtualSize = SectionTotalSize - Last.Header.PointerToRawData;
 }
 
 void Writer::writeHeader() {
@@ -130,20 +130,17 @@ void Writer::open() {
 
 void Writer::writeSections() {
   int Idx = 0;
-  for (OutputSection &Group : OutputSections) {
-    coff_section &Hdr = SectionTable[Idx++];
-    strncpy(Hdr.Name, Group.Name.data(), std::min(Group.Name.size(), size_t(8)));
-    Hdr.VirtualSize = Group.Size;
-    Hdr.VirtualAddress = Group.RVA;
-    Hdr.SizeOfRawData = Group.Size;
+  for (OutputSection &Out : OutputSections) {
+    Out.finalize();
+    SectionTable[Idx++] = Out.Header;
   }
 }
 
 void Writer::backfillHeaders() {
-  for (OutputSection &Group : OutputSections) {
-    if (Group.Name == ".text") {
-      PE->SizeOfCode = Group.Size;
-      PE->BaseOfCode = Group.RVA;
+  for (OutputSection &Out : OutputSections) {
+    if (Out.Name == ".text") {
+      PE->SizeOfCode = Out.Header.VirtualSize;
+      PE->BaseOfCode = Out.Header.VirtualAddress;
       return;
     }
   }

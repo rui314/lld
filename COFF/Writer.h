@@ -43,10 +43,14 @@ public:
 
 class OutputSection {
 public:
-  uint64_t FileOffset;
-  uint64_t RVA;
-  uint64_t Size;
+  OutputSection() { memset(&Header, 0, sizeof(Header)); }
+
+  void finalize() {
+    strncpy(Header.Name, Name.data(), std::min(Name.size(), size_t(8)));
+  }
+
   llvm::StringRef Name;
+  llvm::object::coff_section Header;
   std::vector<Section *> Sections;
 };
 
