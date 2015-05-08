@@ -46,6 +46,9 @@ void OutputSection::addSection(Section *Sec) {
   Sec->FileOffset = Header.SizeOfRawData;
   Header.VirtualSize += Sec->Header->SizeOfRawData;
   Header.SizeOfRawData += Sec->Header->SizeOfRawData;
+  Header.Characteristics = llvm::COFF::IMAGE_SCN_MEM_READ
+    | llvm::COFF::IMAGE_SCN_CNT_CODE
+    | llvm::COFF::IMAGE_SCN_MEM_EXECUTE;
   Sections.push_back(Sec);
 }
 
@@ -63,7 +66,7 @@ void OutputSection::setFileOffset(uint64_t Off) {
 
 void OutputSection::finalize() {
   strncpy(Header.Name, Name.data(), std::min(Name.size(), size_t(8)));
-  Header.VirtualSize = RoundUpToAlignment(Header.VirtualSize, 4096);
+  Header.SizeOfRawData = RoundUpToAlignment(Header.SizeOfRawData, 512);
 }
 
 void Writer::groupSections() {
@@ -91,7 +94,7 @@ void Writer::assignAddresses() {
     RVA += RoundUpToAlignment(Out.Header.VirtualSize, PageSize);
     FileOff += RoundUpToAlignment(Out.Header.SizeOfRawData, FileAlignment);
   }
-  SectionTotalSize = RoundUpToAlignment(FileOff - InitFileOff, PageSize);
+  SectionTotalSize = RoundUpToAlignment(FileOff - InitFileOff, 512);
 }
 
 void Writer::writeHeader() {
@@ -114,7 +117,8 @@ void Writer::writeHeader() {
   COFF->Machine = llvm::COFF::IMAGE_FILE_MACHINE_AMD64;
   COFF->NumberOfSections = OutputSections.size();
   COFF->Characteristics = (llvm::COFF::IMAGE_FILE_EXECUTABLE_IMAGE
-			   | llvm::COFF::IMAGE_FILE_RELOCS_STRIPPED);
+			   | llvm::COFF::IMAGE_FILE_RELOCS_STRIPPED
+			   | llvm::COFF::IMAGE_FILE_LARGE_ADDRESS_AWARE);
   COFF->SizeOfOptionalHeader = sizeof(pe32plus_header)
     + sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
 
@@ -123,11 +127,14 @@ void Writer::writeHeader() {
   P += sizeof(pe32plus_header);
   PE->Magic = llvm::COFF::PE32Header::PE32_PLUS;
   PE->ImageBase = 0x140000000;
+  PE->AddressOfEntryPoint = 0x1000;
   PE->SectionAlignment = SectionAlignment;
   PE->FileAlignment = FileAlignment;
   PE->MajorOperatingSystemVersion = 6;
+  PE->MajorOperatingSystemVersion = 6;
   PE->MajorSubsystemVersion = 6;
-  PE->SizeOfImage = SectionTotalSize;
+  PE->Subsystem = llvm::COFF::IMAGE_SUBSYSTEM_WINDOWS_CUI;
+  PE->SizeOfImage = EndOfSectionTable + SectionTotalSize;
   PE->SizeOfStackReserve = 1024 * 1024;
   PE->SizeOfStackCommit = 4096;
   PE->SizeOfHeapReserve = 1024 * 1024;
@@ -168,7 +175,7 @@ void Writer::writeSections() {
 void Writer::backfillHeaders() {
   for (OutputSection &Out : OutputSections) {
     if (Out.Name == ".text") {
-      PE->SizeOfCode = Out.Header.VirtualSize;
+      PE->SizeOfCode = Out.Header.SizeOfRawData;
       PE->BaseOfCode = Out.Header.VirtualAddress;
       return;
     }
