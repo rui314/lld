@@ -22,32 +22,50 @@ using namespace llvm::object;
 namespace lld {
 namespace coff {
 
-static void sortSections(SectionList &Sections) {
-  std::sort(Sections.begin(), Sections.end(),
-	    [](std::unique_ptr<Section> &A, std::unique_ptr<Section> &B) {
-	      return A->Name < B->Name;
-	    });
-}
-
 static uint64_t getSectionAlignment(const coff_section *Sec) {
   return uint64_t(1) << (((Sec->Characteristics & 0x00F00000) >> 20) - 1);
 }
 
-void Writer::assignAddress() {
-  uint64_t Off = 0;
+static StringRef stripDollar(StringRef Name) {
+  return Name.substr(0, Name.find('$'));
+}
+
+void Writer::groupSections() {
   StringRef Last = "";
   for (std::unique_ptr<Section> &Sec : Sections) {
-    if (Last != Sec->Name) {
-      ++NumSections;
-      Off = RoundUpToAlignment(Off, 4096);
+    StringRef Name = stripDollar(Sec->Name);
+    if (Name != Last)
+      SectionGroups.emplace_back();
+    SectionGroup &Group = SectionGroups.back();
+    Group.Name = Name;
+    Group.Sections.push_back(Sec.get());
+    Last = Name;
+  }
+}
+
+void Writer::assignAddresses() {
+  uint64_t Off = 0;
+  for (SectionGroup &Group : SectionGroups) {
+    Off = RoundUpToAlignment(Off, 4096);
+    Off = RoundUpToAlignment(Off, getSectionAlignment(Group.Sections.front()->Sec));
+    Group.FileOffset = Off;
+    Group.RVA = Off;
+    for (Section *Sec : Group.Sections) {
+      Off = RoundUpToAlignment(Off, getSectionAlignment(Sec->Sec));
+      Sec->FileOffset = Off;
+      Sec->RVA = Off;
+      Off += Sec->getSectionSize();
     }
-    Last = Sec->Name;
-    Off = RoundUpToAlignment(Off, getSectionAlignment(Sec->Sec));
-    Sec->FileOffset = Off;
-    Sec->RVA = Off;
-    Off += Sec->getSectionSize();
   }
   SectionTotalSize = RoundUpToAlignment(Off, 4096);
+
+  for (auto I = SectionGroups.begin(), E = SectionGroups.end() - 1; I < E; ++I) {
+    SectionGroup &Curr = *I;
+    SectionGroup &Next = *(I + 1);
+    Curr.Size = Next.FileOffset - Curr.FileOffset;
+  }
+  SectionGroup &Last = SectionGroups.back();
+  Last.Size = SectionTotalSize - Last.FileOffset;
 }
 
 void Writer::writeHeader() {
@@ -68,7 +86,7 @@ void Writer::writeHeader() {
   COFF = reinterpret_cast<coff_file_header *>(P);
   P += sizeof(coff_file_header);
   COFF->Machine = llvm::COFF::IMAGE_FILE_MACHINE_AMD64;
-  COFF->NumberOfSections = NumSections;
+  COFF->NumberOfSections = SectionGroups.size();
   COFF->Characteristics = llvm::COFF::IMAGE_FILE_EXECUTABLE_IMAGE;
   COFF->SizeOfOptionalHeader = sizeof(pe32plus_header)
     + sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
@@ -93,12 +111,12 @@ void Writer::writeHeader() {
   // Initialize SectionTable pointer
   SectionTable = reinterpret_cast<coff_section *>(P);
   PE->SizeOfHeaders = RoundUpToAlignment(
-    HeaderSize + sizeof(coff_section) * NumSections, 4096);
+    HeaderSize + sizeof(coff_section) * SectionGroups.size(), 4096);
 }
 
 void Writer::open() {
   uint64_t Size = RoundUpToAlignment(
-    HeaderSize + sizeof(coff_section) * NumSections, 4096);
+    HeaderSize + sizeof(coff_section) * SectionGroups.size(), 4096);
   Size += SectionTotalSize;
   if (auto EC = FileOutputBuffer::create(
 	Path, Size, Buffer, FileOutputBuffer::F_executable)) {
@@ -108,19 +126,18 @@ void Writer::open() {
 
 void Writer::writeSections() {
   int Idx = 0;
-  StringRef Last = "";
-  for (std::unique_ptr<Section> &Sec : Sections) {
-    if (Last != Sec->Name) {
-      coff_section &Hdr = SectionTable[Idx++];
-      strncpy(Hdr.Name, Sec->Name.data(), std::min(Sec->Name.size(), size_t(8)));
-    }
+  for (SectionGroup &Group : SectionGroups) {
+    coff_section &Hdr = SectionTable[Idx++];
+    strncpy(Hdr.Name, Group.Name.data(), std::min(Group.Name.size(), size_t(8)));
+    Hdr.VirtualSize = Group.Size;
+    Hdr.VirtualAddress = Group.RVA;
+    Hdr.SizeOfRawData = Group.Size;
   }
 }
 
 void Writer::write() {
-  sortSections(Sections);
-  assignAddress();
-
+  groupSections();
+  assignAddresses();
   open();
   writeHeader();
   writeSections();

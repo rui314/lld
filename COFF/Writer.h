@@ -41,6 +41,15 @@ public:
   uint64_t RVA;
 };
 
+class SectionGroup {
+public:
+  uint64_t FileOffset;
+  uint64_t RVA;
+  uint64_t Size;
+  llvm::StringRef Name;
+  std::vector<Section *> Sections;
+};
+
 typedef std::vector<std::unique_ptr<Section>> SectionList;
 
 class Writer {
@@ -52,7 +61,8 @@ public:
 private:
   void open();
   void writeHeader();
-  void assignAddress();
+  void groupSections();
+  void assignAddresses();
   void writeSections();
 
   llvm::StringRef Path;
@@ -62,8 +72,8 @@ private:
   llvm::object::pe32plus_header *PE;
   llvm::object::data_directory *DataDirectory;
   llvm::object::coff_section *SectionTable;
-  int NumSections = 0;
-  uint64_t SectionTotalSize = 0;
+  std::vector<SectionGroup> SectionGroups;
+  uint64_t SectionTotalSize;
 
   const int DOSStubSize = 64;
   const int NumberfOfDataDirectory = 16;
