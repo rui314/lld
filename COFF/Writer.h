@@ -11,6 +11,8 @@
 #define LLD_COFF_WRITER_H
 
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Object/COFF.h"
+#include "llvm/Support/FileOutputBuffer.h"
 #include <memory>
 #include <vector>
 
@@ -37,7 +39,26 @@ public:
 
 typedef std::vector<std::unique_ptr<Section>> SectionList;
 
-void write(llvm::StringRef OutputPath, SectionList &Files);
+class Writer {
+public:
+  explicit Writer(llvm::StringRef P) : Path(P) {}
+  void addSections(SectionList &&S) { Sections = std::move(S); }
+  void write();
+
+private:
+  void open();
+
+  llvm::StringRef Path;
+  std::unique_ptr<llvm::FileOutputBuffer> Buffer;
+  SectionList Sections;
+  llvm::object::coff_file_header *COFF;
+  llvm::object::pe32plus_header *PE;
+
+  const int DOSStubSize = 64;
+  const int HeaderSize = DOSStubSize + sizeof(llvm::COFF::PEMagic)
+    + sizeof(llvm::object::coff_file_header)
+    + sizeof(llvm::object::pe32plus_header);
+};
 
 } // namespace pecoff
 } // namespace lld
