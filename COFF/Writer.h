@@ -30,18 +30,18 @@ class Section {
 public:
   Section(llvm::object::COFFObjectFile *F,
 	  const llvm::object::coff_section *S, llvm::StringRef N)
-    : File(F), Sec(S), Name(N) {}
+    : File(F), Header(S), Name(N) {}
 
-  uint64_t getSectionSize() const { return File->getSectionSize(Sec); }
+  uint64_t getSectionSize() const { return File->getSectionSize(Header); }
 
   llvm::object::COFFObjectFile *File;
-  const llvm::object::coff_section *Sec;
+  const llvm::object::coff_section *Header;
   llvm::StringRef Name;
   uint64_t FileOffset;
   uint64_t RVA;
 };
 
-class SectionGroup {
+class OutputSection {
 public:
   uint64_t FileOffset;
   uint64_t RVA;
@@ -73,7 +73,7 @@ private:
   llvm::object::pe32plus_header *PE;
   llvm::object::data_directory *DataDirectory;
   llvm::object::coff_section *SectionTable;
-  std::vector<SectionGroup> SectionGroups;
+  std::vector<OutputSection> OutputSections;
   uint64_t SectionTotalSize;
 
   const int DOSStubSize = 64;

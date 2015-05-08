@@ -35,8 +35,8 @@ void Writer::groupSections() {
   for (std::unique_ptr<Section> &Sec : Sections) {
     StringRef Name = stripDollar(Sec->Name);
     if (Name != Last)
-      SectionGroups.emplace_back();
-    SectionGroup &Group = SectionGroups.back();
+      OutputSections.emplace_back();
+    OutputSection &Group = OutputSections.back();
     Group.Name = Name;
     Group.Sections.push_back(Sec.get());
     Last = Name;
@@ -45,13 +45,13 @@ void Writer::groupSections() {
 
 void Writer::assignAddresses() {
   uint64_t Off = 0;
-  for (SectionGroup &Group : SectionGroups) {
+  for (OutputSection &Group : OutputSections) {
     Off = RoundUpToAlignment(Off, PageSize);
-    Off = RoundUpToAlignment(Off, getSectionAlignment(Group.Sections.front()->Sec));
+    Off = RoundUpToAlignment(Off, getSectionAlignment(Group.Sections.front()->Header));
     Group.FileOffset = Off;
     Group.RVA = Off;
     for (Section *Sec : Group.Sections) {
-      Off = RoundUpToAlignment(Off, getSectionAlignment(Sec->Sec));
+      Off = RoundUpToAlignment(Off, getSectionAlignment(Sec->Header));
       Sec->FileOffset = Off;
       Sec->RVA = Off;
       Off += Sec->getSectionSize();
@@ -59,12 +59,12 @@ void Writer::assignAddresses() {
   }
   SectionTotalSize = RoundUpToAlignment(Off, PageSize);
 
-  for (auto I = SectionGroups.begin(), E = SectionGroups.end() - 1; I < E; ++I) {
-    SectionGroup &Curr = *I;
-    SectionGroup &Next = *(I + 1);
+  for (auto I = OutputSections.begin(), E = OutputSections.end() - 1; I < E; ++I) {
+    OutputSection &Curr = *I;
+    OutputSection &Next = *(I + 1);
     Curr.Size = Next.FileOffset - Curr.FileOffset;
   }
-  SectionGroup &Last = SectionGroups.back();
+  OutputSection &Last = OutputSections.back();
   Last.Size = SectionTotalSize - Last.FileOffset;
 }
 
@@ -86,7 +86,7 @@ void Writer::writeHeader() {
   COFF = reinterpret_cast<coff_file_header *>(P);
   P += sizeof(coff_file_header);
   COFF->Machine = llvm::COFF::IMAGE_FILE_MACHINE_AMD64;
-  COFF->NumberOfSections = SectionGroups.size();
+  COFF->NumberOfSections = OutputSections.size();
   COFF->Characteristics = (llvm::COFF::IMAGE_FILE_EXECUTABLE_IMAGE
 			   | llvm::COFF::IMAGE_FILE_RELOCS_STRIPPED);
   COFF->SizeOfOptionalHeader = sizeof(pe32plus_header)
@@ -115,12 +115,12 @@ void Writer::writeHeader() {
   // Initialize SectionTable pointer
   SectionTable = reinterpret_cast<coff_section *>(P);
   PE->SizeOfHeaders = RoundUpToAlignment(
-    HeaderSize + sizeof(coff_section) * SectionGroups.size(), FileAlignment);
+    HeaderSize + sizeof(coff_section) * OutputSections.size(), FileAlignment);
 }
 
 void Writer::open() {
   uint64_t Size = RoundUpToAlignment(
-    HeaderSize + sizeof(coff_section) * SectionGroups.size(), PageSize);
+    HeaderSize + sizeof(coff_section) * OutputSections.size(), PageSize);
   Size += SectionTotalSize;
   if (auto EC = FileOutputBuffer::create(
 	Path, Size, Buffer, FileOutputBuffer::F_executable)) {
@@ -130,7 +130,7 @@ void Writer::open() {
 
 void Writer::writeSections() {
   int Idx = 0;
-  for (SectionGroup &Group : SectionGroups) {
+  for (OutputSection &Group : OutputSections) {
     coff_section &Hdr = SectionTable[Idx++];
     strncpy(Hdr.Name, Group.Name.data(), std::min(Group.Name.size(), size_t(8)));
     Hdr.VirtualSize = Group.Size;
@@ -140,7 +140,7 @@ void Writer::writeSections() {
 }
 
 void Writer::backfillHeaders() {
-  for (SectionGroup &Group : SectionGroups) {
+  for (OutputSection &Group : OutputSections) {
     if (Group.Name == ".text") {
       PE->SizeOfCode = Group.Size;
       PE->BaseOfCode = Group.RVA;
