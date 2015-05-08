@@ -47,17 +47,21 @@ public:
 
 private:
   void open();
+  void writeHeader();
 
   llvm::StringRef Path;
   std::unique_ptr<llvm::FileOutputBuffer> Buffer;
   SectionList Sections;
   llvm::object::coff_file_header *COFF;
   llvm::object::pe32plus_header *PE;
+  llvm::object::data_directory *DataDirectory;
 
   const int DOSStubSize = 64;
+  const int NumberfOfDataDirectory = 16;
   const int HeaderSize = DOSStubSize + sizeof(llvm::COFF::PEMagic)
     + sizeof(llvm::object::coff_file_header)
-    + sizeof(llvm::object::pe32plus_header);
+    + sizeof(llvm::object::pe32plus_header)
+    + sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
 };
 
 } // namespace pecoff

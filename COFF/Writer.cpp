@@ -30,15 +30,10 @@ static SectionMap groupSections(SectionList &Sections) {
   return Result;
 }
 
-void Writer::open() {
-  if (auto EC = FileOutputBuffer::create(
-	Path, HeaderSize, Buffer, FileOutputBuffer::F_executable)) {
-    llvm::errs() << "Failed to open " << Path << ": " << EC.message() << "\n";
-    return;
-  }
-
+void Writer::writeHeader() {
   // Write DOS stub header
   uint8_t *P = Buffer->getBufferStart();
+  P += DOSStubSize;
   auto *DOS = reinterpret_cast<dos_header *>(P);
   DOS->Magic[0] = 'M';
   DOS->Magic[1] = 'Z';
@@ -46,17 +41,41 @@ void Writer::open() {
   DOS->AddressOfNewExeHeader = DOSStubSize;
 
   // Write PE magic
-  memcpy(P + DOSStubSize, llvm::COFF::PEMagic, sizeof(llvm::COFF::PEMagic));
+  memcpy(P, llvm::COFF::PEMagic, sizeof(llvm::COFF::PEMagic));
+  P += sizeof(llvm::COFF::PEMagic);
 
   // Write some COFF header attributes
-  COFF = reinterpret_cast<coff_file_header *>(
-    P + DOSStubSize + sizeof(llvm::COFF::PEMagic));
+  COFF = reinterpret_cast<coff_file_header *>(P);
+  P += sizeof(coff_file_header);
   COFF->Machine = llvm::COFF::IMAGE_FILE_MACHINE_AMD64;
+  COFF->Characteristics = llvm::COFF::IMAGE_FILE_EXECUTABLE_IMAGE;
+  COFF->SizeOfOptionalHeader = sizeof(pe32plus_header)
+    + sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
 
   // Write some PE header attributes
-  PE = reinterpret_cast<pe32plus_header *>(
-    P + DOSStubSize + sizeof(llvm::COFF::PEMagic) + sizeof(coff_file_header));
+  PE = reinterpret_cast<pe32plus_header *>(P);
+  P += sizeof(pe32plus_header);
   PE->Magic = llvm::COFF::PE32Header::PE32_PLUS;
+  PE->ImageBase = 0x400000;
+  PE->SectionAlignment = 4096;
+  PE->FileAlignment = 512;
+  PE->SizeOfStackReserve = 1024 * 1024;
+  PE->SizeOfStackCommit = 4096;
+  PE->SizeOfHeapReserve = 1024 * 1024;;
+  PE->SizeOfHeapCommit = 4096;
+  PE->NumberOfRvaAndSize = NumberfOfDataDirectory;
+
+  DataDirectory = reinterpret_cast<data_directory *>(P);
+  P += sizeof(data_directory) * NumberfOfDataDirectory;
+}
+
+void Writer::open() {
+  if (auto EC = FileOutputBuffer::create(
+	Path, HeaderSize, Buffer, FileOutputBuffer::F_executable)) {
+    llvm::errs() << "Failed to open " << Path << ": " << EC.message() << "\n";
+    return;
+  }
+  writeHeader();
 }
 
 void Writer::write() {
