@@ -19,6 +19,7 @@
 #include "llvm/Option/Option.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 #include <memory>
 #include <sstream>
@@ -89,6 +90,12 @@ static void readSections(lld::coff::SectionList &Result, COFFObjectFile *File) {
   }
 }
 
+static std::string replaceExtension(StringRef Path, StringRef Ext) {
+  SmallString<128> Val = Path;
+  llvm::sys::path::replace_extension(Val, Ext);
+  return Val.str();
+}
+
 namespace lld {
 
 bool linkCOFF(int Argc, const char *Argv[]) {
@@ -128,9 +135,17 @@ bool linkCOFF(int Argc, const char *Argv[]) {
     return true;
   }
 
-  coff::Writer writer("a.exe");
-  writer.addSections(std::move(Sections));
-  writer.write();
+  std::string OutputFile;
+  if (auto *Arg = Args->getLastArg(OPT_out)) {
+    OutputFile = Arg->getValue();
+  } else {
+    StringRef Path = Args->getLastArg(OPT_INPUT)[0].getValue();
+    OutputFile = replaceExtension(Path, ".exe");
+  }
+
+  coff::Writer Writer(OutputFile);
+  Writer.addSections(std::move(Sections));
+  Writer.write();
   return true;
 }
 
