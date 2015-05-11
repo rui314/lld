@@ -1,4 +1,4 @@
-//===- Writer.cpp ---------------------------------------------------------===// 
+//===- Writer.cpp ---------------------------------------------------------===//
 //
 //                             The LLVM Linker
 //
@@ -38,6 +38,15 @@ ArrayRef<uint8_t> Section::getContent() const {
   return Res;
 }
 
+static uint32_t
+mergeCharacteristics(const coff_section *A, const coff_section *B) {
+  uint32_t Mask = (llvm::COFF::IMAGE_SCN_MEM_SHARED
+		   | llvm::COFF::IMAGE_SCN_MEM_EXECUTE
+		   | llvm::COFF::IMAGE_SCN_MEM_READ
+		   | llvm::COFF::IMAGE_SCN_CNT_CODE);
+  return (A->Characteristics | B->Characteristics) & Mask;
+}
+
 void OutputSection::addSection(Section *Sec) {
   uint64_t Align = getSectionAlignment(Sec->Header);
   Header.VirtualSize = RoundUpToAlignment(Header.VirtualSize, Align);
@@ -46,9 +55,7 @@ void OutputSection::addSection(Section *Sec) {
   Sec->FileOffset = Header.SizeOfRawData;
   Header.VirtualSize += Sec->Header->SizeOfRawData;
   Header.SizeOfRawData += Sec->Header->SizeOfRawData;
-  Header.Characteristics = llvm::COFF::IMAGE_SCN_MEM_READ
-    | llvm::COFF::IMAGE_SCN_CNT_CODE
-    | llvm::COFF::IMAGE_SCN_MEM_EXECUTE;
+  Header.Characteristics = mergeCharacteristics(&Header, Sec->Header);
   Sections.push_back(Sec);
 }
 
@@ -84,9 +91,20 @@ void Writer::groupSections() {
     HeaderSize + sizeof(coff_section) * OutputSections.size(), PageSize);
 }
 
+void Writer::removeEmptySections() {
+  auto IsEmpty = [](const OutputSection &S) {
+    return S.Header.VirtualSize == 0;
+  };
+  OutputSections.erase(std::remove_if(OutputSections.begin(),
+				      OutputSections.end(),
+				      IsEmpty),
+		       OutputSections.end());
+}
+
 void Writer::assignAddresses() {
   uint64_t RVA = 0x1000;
   uint64_t FileOff = EndOfSectionTable;
+  uint64_t InitRVA = RVA;
   uint64_t InitFileOff = FileOff;
   for (OutputSection &Out : OutputSections) {
     Out.setRVA(RVA);
@@ -94,7 +112,8 @@ void Writer::assignAddresses() {
     RVA += RoundUpToAlignment(Out.Header.VirtualSize, PageSize);
     FileOff += RoundUpToAlignment(Out.Header.SizeOfRawData, FileAlignment);
   }
-  SectionTotalSize = RoundUpToAlignment(FileOff - InitFileOff, 512);
+  SectionTotalSizeDisk = RoundUpToAlignment(FileOff - InitFileOff, FileAlignment);
+  SectionTotalSizeMemory = RoundUpToAlignment(RVA - InitRVA, PageSize);
 }
 
 void Writer::writeHeader() {
@@ -134,7 +153,7 @@ void Writer::writeHeader() {
   PE->MajorOperatingSystemVersion = 6;
   PE->MajorSubsystemVersion = 6;
   PE->Subsystem = llvm::COFF::IMAGE_SUBSYSTEM_WINDOWS_CUI;
-  PE->SizeOfImage = EndOfSectionTable + SectionTotalSize;
+  PE->SizeOfImage = EndOfSectionTable + SectionTotalSizeMemory;
   PE->SizeOfStackReserve = 1024 * 1024;
   PE->SizeOfStackCommit = 4096;
   PE->SizeOfHeapReserve = 1024 * 1024;
@@ -151,8 +170,8 @@ void Writer::writeHeader() {
     HeaderSize + sizeof(coff_section) * OutputSections.size(), FileAlignment);
 }
 
-void Writer::open() {
-  uint64_t Size = EndOfSectionTable + SectionTotalSize;
+void Writer::openFile() {
+  uint64_t Size = EndOfSectionTable + SectionTotalSizeDisk;
   if (auto EC = FileOutputBuffer::create(
 	Path, Size, Buffer, FileOutputBuffer::F_executable)) {
     llvm::errs() << "Failed to open " << Path << ": " << EC.message() << "\n";
@@ -184,8 +203,9 @@ void Writer::backfillHeaders() {
 
 void Writer::write() {
   groupSections();
+  removeEmptySections();
   assignAddresses();
-  open();
+  openFile();
   writeHeader();
   writeSections();
   backfillHeaders();

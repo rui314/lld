@@ -85,8 +85,9 @@ static void readSections(lld::coff::SectionList &Result, COFFObjectFile *File) {
       llvm::errs() << "Failed to get a section name: " << EC.message() << "\n";
       return;
     }
-    if (Name.startswith(".text"))
-      Result.push_back(make_unique<lld::coff::Section>(File, Sec, Name));
+    if (Sec->Characteristics & llvm::COFF::IMAGE_SCN_LNK_REMOVE)
+      continue;
+    Result.push_back(make_unique<lld::coff::Section>(File, Sec, Name));
   }
 }
 

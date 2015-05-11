@@ -1,3 +1,4 @@
+
 //===- Writer.h -----------------------------------------------------------===//
 //
 //                             The LLVM Linker
@@ -73,8 +74,9 @@ public:
   void write();
 
 private:
-  void open();
+  void openFile();
   void writeHeader();
+  void removeEmptySections();
   void groupSections();
   void assignAddresses();
   void backfillHeaders();
@@ -89,7 +91,9 @@ private:
   llvm::object::coff_section *SectionTable;
   std::vector<OutputSection> OutputSections;
   uint64_t EndOfSectionTable;
-  uint64_t SectionTotalSize;
+
+  uint64_t SectionTotalSizeDisk;
+  uint64_t SectionTotalSizeMemory;
 
   const int PageSize = 4096;
   const int FileAlignment = 512;
