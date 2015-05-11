@@ -28,6 +28,9 @@ struct coff_section;
 namespace lld {
 namespace coff {
 
+const int PageSize = 4096;
+const int FileAlignment = 512;
+const int SectionAlignment = 4096;
 const int DOSStubSize = 64;
 const int NumberfOfDataDirectory = 16;
 const int HeaderSize = DOSStubSize + sizeof(llvm::COFF::PEMagic)
@@ -56,6 +59,7 @@ public:
   OutputSection() { memset(&Header, 0, sizeof(Header)); }
 
   void addSection(Section *);
+  void sort();
   void finalize();
   void setRVA(uint64_t);
   void setFileOffset(uint64_t);
@@ -94,10 +98,6 @@ private:
 
   uint64_t SectionTotalSizeDisk;
   uint64_t SectionTotalSizeMemory;
-
-  const int PageSize = 4096;
-  const int FileAlignment = 512;
-  const int SectionAlignment = 4096;
 };
 
 } // namespace pecoff

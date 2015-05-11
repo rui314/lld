@@ -59,6 +59,13 @@ void OutputSection::addSection(Section *Sec) {
   Sections.push_back(Sec);
 }
 
+void OutputSection::sort() {
+  auto comp = [](const Section *A, const Section *B) {
+    return A->Name < B->Name;
+  };
+  std::stable_sort(Sections.begin(), Sections.end(), comp);
+}
+
 void OutputSection::setRVA(uint64_t RVA) {
   Header.VirtualAddress = RVA;
   for (Section *Sec : Sections)
@@ -73,7 +80,7 @@ void OutputSection::setFileOffset(uint64_t Off) {
 
 void OutputSection::finalize() {
   strncpy(Header.Name, Name.data(), std::min(Name.size(), size_t(8)));
-  Header.SizeOfRawData = RoundUpToAlignment(Header.SizeOfRawData, 512);
+  Header.SizeOfRawData = RoundUpToAlignment(Header.SizeOfRawData, PageSize);
 }
 
 void Writer::groupSections() {
@@ -87,6 +94,8 @@ void Writer::groupSections() {
     Out.addSection(Sec.get());
     Last = Name;
   }
+  for (OutputSection &Sec : OutputSections)
+    Sec.sort();
   EndOfSectionTable = RoundUpToAlignment(
     HeaderSize + sizeof(coff_section) * OutputSections.size(), PageSize);
 }
