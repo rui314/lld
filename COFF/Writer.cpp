@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "Symbol.h"
 #include "Writer.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Object/COFF.h"
@@ -29,13 +30,6 @@ static uint64_t getSectionAlignment(const coff_section *Sec) {
 
 static StringRef stripDollar(StringRef Name) {
   return Name.substr(0, Name.find('$'));
-}
-
-ArrayRef<uint8_t> Section::getContent() const {
-  ArrayRef<uint8_t> Res;
-  if (auto EC = File->getSectionContents(Header, Res))
-    llvm::errs() << "getSectionContents failed: " << EC.message() << "\n";
-  return Res;
 }
 
 static uint32_t
@@ -80,7 +74,7 @@ void OutputSection::setFileOffset(uint64_t Off) {
 
 void OutputSection::finalize() {
   strncpy(Header.Name, Name.data(), std::min(Name.size(), size_t(8)));
-  Header.SizeOfRawData = RoundUpToAlignment(Header.SizeOfRawData, PageSize);
+  Header.SizeOfRawData = RoundUpToAlignment(Header.SizeOfRawData, FileAlignment);
 }
 
 void Writer::groupSections() {

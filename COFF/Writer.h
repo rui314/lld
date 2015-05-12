@@ -1,4 +1,3 @@
-
 //===- Writer.h -----------------------------------------------------------===//
 //
 //                             The LLVM Linker
@@ -11,6 +10,7 @@
 #ifndef LLD_COFF_WRITER_H
 #define LLD_COFF_WRITER_H
 
+#include "Section.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Support/FileOutputBuffer.h"
@@ -37,22 +37,6 @@ const int HeaderSize = DOSStubSize + sizeof(llvm::COFF::PEMagic)
   + sizeof(llvm::object::coff_file_header)
   + sizeof(llvm::object::pe32plus_header)
   + sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
-
-class Section {
-public:
-  Section(llvm::object::COFFObjectFile *F,
-	  const llvm::object::coff_section *S, llvm::StringRef N)
-    : File(F), Header(S), Name(N) {}
-
-  uint64_t getSectionSize() const { return File->getSectionSize(Header); }
-  llvm::ArrayRef<uint8_t> getContent() const;
-
-  llvm::object::COFFObjectFile *File;
-  const llvm::object::coff_section *Header;
-  llvm::StringRef Name;
-  uint64_t FileOffset = 0;
-  uint64_t RVA = 0;
-};
 
 class OutputSection {
 public:
