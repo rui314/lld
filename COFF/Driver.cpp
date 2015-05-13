@@ -117,6 +117,11 @@ bool linkCOFF(int Argc, const char *Argv[]) {
 		 << Arg->getSpelling() << "\n";
   }
 
+  if (Args->filtered_begin(OPT_INPUT) == Args->filtered_end()) {
+    llvm::errs() << "no input files.\n";
+    return true;
+  }
+
   std::vector<std::unique_ptr<COFFObjectFile>> Files;
   std::vector<std::unique_ptr<lld::coff::Section>> Sections;
   for (auto *Arg : Args->filtered(OPT_INPUT)) {
@@ -129,11 +134,6 @@ bool linkCOFF(int Argc, const char *Argv[]) {
     std::unique_ptr<COFFObjectFile> File = std::move(FileOrErr.get());
     readSections(Sections, File.get());
     Files.push_back(std::move(File));
-  }
-
-  if (Files.empty()) {
-    llvm::errs() << "no input files.\n";
-    return true;
   }
 
   std::string OutputFile;
