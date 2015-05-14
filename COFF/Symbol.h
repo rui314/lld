@@ -19,61 +19,97 @@
 namespace lld {
 namespace coff {
 
+class ArchiveFile;
+class ObjectFile;
+class Section;
+
 class Symbol {
 public:
-  enum Definition { Defined, Undefined, Library };
-  Definition getDefinition() const { return Def; }
+  enum Kind { DefinedKind, UndefinedKind, CanBeDefinedKind };
+  Kind kind() const { return SymbolKind; }
 
 protected:
-  Symbol(Definition D) : Def(D) {}
+  Symbol(Kind K) : SymbolKind(K) {}
 
 private:
-  Definition Def;
+  const Kind SymbolKind;
 };
 
-class DefinedSymbol : public Symbol {
+class Defined {
 public:
-  DefinedSymbol() : Symbol(Defined) {}
-  static bool classof(const Symbol *S) { return S->getDefinition() == Defined; }
+  Defined(ObjectFile *F, COFFSymbolRef S)
+    : Symbol(DefinedKind), File(F), Sym(S) {}
+  static bool classof(const Symbol *S) { return S->kind() == DefinedKind; }
 
-  Section *Sec;
+  ObjectFile *File;
+  COFFSymbolRef Sym;
 };
 
-class UndefinedSymbol : public Symbol {
+class CanBeDefined {
 public:
-  static bool classof(const Symbol *S) { return S->getDefinition() == Undefined; }
+  CanBeDefined(ArchiveFile *P, Archive::Symbol *S)
+    : Symbol(CanBeDefinedKind), Parent(P), Sym(S) {}
+  static bool classof(const Symbol *S) { return S->kind() == CanBeDefinedKind; }
+
+  ArchiveFile *Parent;
+  Archive::Symbol *Sym;
 };
 
-class LibrarySymbol : public Symbol {
+class Undefined {
 public:
-  static bool classof(const Symbol *S) { return S->getDefinition() == Library; }
+  Undefined() : Symbol(UndefinedKind) {}
+  static bool classof(const Symbol *S) { return S->kind() == UndefinedKind; }
+
+  ObjectFile *File;
 };
 
 struct SymbolRef {
-  llvm::StringRef Name;
-  Symbol *Sym;
+  StringRef Name;
+  Symbol *Ptr = nullptr;
 };
 
-class SymbolTable {
+class ArchiveFile {
 public:
-  SymbolRef *intern(llvm::StringRef S) { return &Table[S]; }
+  static ErrorOr<std::unique_ptr<ArchiveFile>> create(StringRef Path);
 
-  bool checkUndefined() {
-    bool ok = true;
-    for (auto &V : Table) {
-      llvm::StringRef Name = V.first;
-      SymbolRef &Ref = V.second;
-      if (!llvm::isa<UndefinedSymbol>(Ref.Sym))
-	continue;
-      llvm::errs() << "Undefined symbol " << Name << "\n";
-      ok = false;
-    }
-    return ok;
-  }
+  std::string Name;
+  std::unique_ptr<Archive> File;
 
 private:
-  std::map<llvm::StringRef, SymbolRef> Table;
+  ArchiveFile(StringRef N, std::unique_ptr<std::Archive> F,
+	      std::unique_ptr<MemoryBuffer> M)
+    : Name(N), File(std::move(F)), MB(std::move(M)) {}
+
+  std::unique_ptr<MemoryBuffer> MB;
 };
+
+class ObjectFile {
+public:
+  static ErrorOr<std::unique_ptr<ObjectFile>> create(StringRef Path);
+  static ErrorOr<std::unique_ptr<ObjectFile>>
+    create(StringRef Path, MemoryBufferRef MB);
+
+  std::string Name;
+  std::vector<Symbol *> Symbols;
+  std::vector<Section *> Sections;
+  std::unique_ptr<COFFObjectFile> File;
+
+private:
+  ObjectFile(StringRef N, std::unique_ptr<COFFObject> *F)
+    : Name(N), File(std::move(F)) {}
+
+  std::unique_ptr<MemoryBuffer> MB;
+};
+
+class InputSection {
+public:
+  COFFObjectFile *File;
+  coff_section *Section;
+  uint64_t RVA;
+  uint64_t FileOff;
+};
+
+typedef std::map<llvm::StringRef, SymbolRef> SymbolTable;
 
 } // namespace pecoff
 } // namespace lld

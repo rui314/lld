@@ -91,8 +91,11 @@ static void readSections(lld::coff::SectionList &Result, COFFObjectFile *File) {
   }
 }
 
-static std::string replaceExtension(StringRef Path, StringRef Ext) {
-  SmallString<128> Val = Path;
+static std::string
+getOutputPath(std::unique_ptr<llvm::opt::InputArgList> &Args) {
+  if (auto *Arg = Args->getLastArg(OPT_out))
+    return Arg->getValue();
+  SmallString<128> Val = Args->getLastArg(OPT_INPUT)[0].getValue();
   llvm::sys::path::replace_extension(Val, Ext);
   return Val.str();
 }
@@ -122,31 +125,24 @@ bool linkCOFF(int Argc, const char *Argv[]) {
     return true;
   }
 
-  std::vector<std::unique_ptr<COFFObjectFile>> Files;
-  std::vector<std::unique_ptr<lld::coff::Section>> Sections;
+  SymbolTable Symtab;
+  Resolver Res(&Symtab);
   for (auto *Arg : Args->filtered(OPT_INPUT)) {
     StringRef Path = Arg->getValue();
     ErrorOr<std::unique_ptr<COFFObjectFile>> FileOrErr = readFile(Arg->getValue());
-    if (std::error_code EC = FileOrErr.getError()) {
+    if (auto EC = FileOrErr.getError()) {
       llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";
       continue;
     }
-    std::unique_ptr<COFFObjectFile> File = std::move(FileOrErr.get());
-    readSections(Sections, File.get());
-    Files.push_back(std::move(File));
+    Res.addFile(std::move(FileOrErr.get()));
   }
+  if (Res.reportRemainingUndefines())
+    return false;
 
-  std::string OutputFile;
-  if (auto *Arg = Args->getLastArg(OPT_out)) {
-    OutputFile = Arg->getValue();
-  } else {
-    StringRef Path = Args->getLastArg(OPT_INPUT)[0].getValue();
-    OutputFile = replaceExtension(Path, ".exe");
-  }
-
-  coff::Writer Writer(OutputFile);
-  Writer.addSections(std::move(Sections));
-  Writer.write();
+  std::vector<std::unique_ptr<COFFObjectFile>> InFiles = Res.getFiles();
+  OutputFile OutFile(&InFiles);
+  OutFile.applyRelocations(&Symtab);  
+  OutFile.write(getOutputPath(Args));
   return true;
 }
 
