@@ -7,7 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Writer.h"
+#include "Resolver.h"
+#include "Symbol.h"
 #include "lld/Core/Error.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
@@ -62,41 +63,12 @@ public:
 };
 } // anonymous namespace
 
-static ErrorOr<std::unique_ptr<COFFObjectFile>> readFile(StringRef Path) {
-  ErrorOr<std::unique_ptr<MemoryBuffer>> MBOrErr = MemoryBuffer::getFile(Path);
-  if (std::error_code EC = MBOrErr.getError())
-    return EC;
-  std::unique_ptr<MemoryBuffer> MB = std::move(MBOrErr.get());
-  auto BinOrErr = llvm::object::createBinary(MB->getMemBufferRef());
-  MB.release(); // leak
-  if (std::error_code EC = BinOrErr.getError())
-    return EC;
-  std::unique_ptr<llvm::object::Binary> Bin = std::move(BinOrErr.get());
-  if (!isa<COFFObjectFile>(Bin.get()))
-    return lld::make_dynamic_error_code(Twine(Path) + " is not a COFF file.");
-  return std::unique_ptr<COFFObjectFile>(cast<COFFObjectFile>(Bin.release()));
-}
-
-static void readSections(lld::coff::SectionList &Result, COFFObjectFile *File) {
-  for (const auto &SectionRef : File->sections()) {
-    const coff_section *Sec = File->getCOFFSection(SectionRef);
-    StringRef Name;
-    if (auto EC = File->getSectionName(Sec, Name)) {
-      llvm::errs() << "Failed to get a section name: " << EC.message() << "\n";
-      return;
-    }
-    if (Sec->Characteristics & llvm::COFF::IMAGE_SCN_LNK_REMOVE)
-      continue;
-    Result.push_back(make_unique<lld::coff::Section>(File, Sec, Name));
-  }
-}
-
 static std::string
 getOutputPath(std::unique_ptr<llvm::opt::InputArgList> &Args) {
   if (auto *Arg = Args->getLastArg(OPT_out))
     return Arg->getValue();
   SmallString<128> Val = Args->getLastArg(OPT_INPUT)[0].getValue();
-  llvm::sys::path::replace_extension(Val, Ext);
+  llvm::sys::path::replace_extension(Val, ".exe");
   return Val.str();
 }
 
@@ -125,11 +97,10 @@ bool linkCOFF(int Argc, const char *Argv[]) {
     return true;
   }
 
-  SymbolTable Symtab;
-  Resolver Res(&Symtab);
+  coff::Resolver Res;
   for (auto *Arg : Args->filtered(OPT_INPUT)) {
     StringRef Path = Arg->getValue();
-    ErrorOr<std::unique_ptr<COFFObjectFile>> FileOrErr = readFile(Arg->getValue());
+    ErrorOr<std::unique_ptr<coff::ObjectFile>> FileOrErr = coff::ObjectFile::create(Path);
     if (auto EC = FileOrErr.getError()) {
       llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";
       continue;
@@ -139,10 +110,10 @@ bool linkCOFF(int Argc, const char *Argv[]) {
   if (Res.reportRemainingUndefines())
     return false;
 
-  std::vector<std::unique_ptr<COFFObjectFile>> *InFiles = Res.getFiles();
-  OutputFile OutFile(InFiles);
-  OutFile.applyRelocations(&Symtab);  
-  OutFile.write(getOutputPath(Args));
+  // std::vector<std::unique_ptr<COFFObjectFile>> *InFiles = Res.getFiles();
+  // OutputFile OutFile(InFiles);
+  // OutFile.applyRelocations(&Symtab);  
+  // OutFile.write(getOutputPath(Args));
   return true;
 }
 

@@ -17,18 +17,21 @@ namespace coff {
 
 class Resolver {
 public:
-  std::error_code addFile(ObjectFile *File);
+  std::error_code addFile(std::unique_ptr<ObjectFile> File);
   std::error_code addFile(ArchiveFile *Archive);
   bool reportRemainingUndefines();
-  std::vector<std::unique_ptr<COFFObjectFile>> &getFiles() { return Files; }
+  std::vector<std::unique_ptr<ObjectFile>> &getFiles() {
+    return Files;
+  }
 
 private:
   std::error_code resolve(SymbolRef *Ref, Symbol *Sym);
-  ErrorOr<SymbolRef *> createSymbol(COFFObjectFile *Obj, COFFSymbolRef Sym);
+  std::error_code addMemberFile(CanBeDefined *Sym);
+  Symbol *createSymbol(ObjectFile *Obj, COFFSymbolRef Sym);
 
   std::vector<std::unique_ptr<ObjectFile>> Files;
-  std::vector<std::unique_ptr<ARchiveFile>> Archives;
-  mutable BumpPtrAllocator Alloc;
+  std::vector<std::unique_ptr<ArchiveFile>> Archives;
+  mutable llvm::BumpPtrAllocator Alloc;
   SymbolTable Symtab;
 };
 

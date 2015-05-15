@@ -4,8 +4,8 @@ add_public_tablegen_target(COFFOptionsTableGen)
 
 add_llvm_library(lldCOFF
   Driver.cpp
-  Section.cpp
-  Writer.cpp
+  Resolver.cpp
+  Symbol.cpp
   )
 
 add_dependencies(lldCOFF COFFOptionsTableGen)

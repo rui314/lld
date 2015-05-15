@@ -10,11 +10,18 @@
 #ifndef LLD_COFF_SYMBOL_H
 #define LLD_COFF_SYMBOL_H
 
-#include "Section.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/Support/raw_ostream.h"
+#include "lld/Core/LLVM.h"
+#include "llvm/Object/Archive.h"
+#include "llvm/Object/COFF.h"
 #include <map>
+#include <memory>
+#include <set>
+#include <vector>
+
+using llvm::object::Archive;
+using llvm::object::COFFObjectFile;
+using llvm::object::COFFSymbolRef;
+using llvm::object::coff_section;
 
 namespace lld {
 namespace coff {
@@ -37,12 +44,9 @@ private:
 
 class Defined : public Symbol {
 public:
-  Defined(ObjectFile *F, Section *Sec, COFFSymbolRef SymRef)
-    : Symbol(DefinedKind), File(F), Sym(SymRef),
-      Section(File->Sections[Sym.getSectionNumber()]) {}
-
+  Defined(ObjectFile *F, COFFSymbolRef SymRef);
   static bool classof(const Symbol *S) { return S->kind() == DefinedKind; }
-  bool IsCOMDAT() const { return Section && Section->IsCOMDAT(); }
+  bool IsCOMDAT() const;
 
   ObjectFile *File;
   COFFSymbolRef Sym;
@@ -51,22 +55,14 @@ public:
 
 class CanBeDefined : public Symbol {
 public:
-  CanBeDefined(ArchiveFile *A, Archive::Symbol *S)
-    : Symbol(CanBeDefinedKind), Archive(A), Sym(S) {}
+  CanBeDefined(ArchiveFile *F, Archive::Symbol *S)
+    : Symbol(CanBeDefinedKind), File(F), Sym(S) {}
   static bool classof(const Symbol *S) { return S->kind() == CanBeDefinedKind; }
 
-  ObjectFile *getMember() {
-    if (BeingReplaced)
-      return nullptr;
-    BeingReplaced = true;
-    return Archive->getMember(Sym);
-  }
+  ErrorOr<std::unique_ptr<ObjectFile>> getMember();
 
-  ArchiveFile *Archive;
+  ArchiveFile *File;
   Archive::Symbol *Sym;
-
-private:
-  bool BeingReplaced = false;
 };
 
 class Undefined : public Symbol {
@@ -79,7 +75,7 @@ public:
 
 struct SymbolRef {
   StringRef Name;
-  Symbol *Ptr = nullptr;
+  Symbol *Ptr;
 };
 
 class ArchiveFile {
@@ -87,16 +83,15 @@ public:
   static ErrorOr<std::unique_ptr<ArchiveFile>> create(StringRef Path);
 
   std::string Name;
-  std::unique_ptr<Archive> Archive;
-  ObjectFile *getMember(Archive::Symbol *Sym);
+  std::unique_ptr<Archive> File;
+  ErrorOr<std::unique_ptr<ObjectFile>> getMember(Archive::Symbol *Sym);
 
 private:
-  ArchiveFile(StringRef N, std::unique_ptr<std::Archive> A,
+  ArchiveFile(StringRef N, std::unique_ptr<Archive> F,
 	      std::unique_ptr<MemoryBuffer> M)
-    : Name(N), Archive(std::move(F)), MB(std::move(M)) {}
+    : Name(N), File(std::move(F)), MB(std::move(M)) {}
 
   std::unique_ptr<MemoryBuffer> MB;
-  std::vector<std::unique_ptr<ObjectFile>> Members;
   std::set<const char *> Seen;
 };
 
@@ -112,7 +107,7 @@ public:
   std::unique_ptr<COFFObjectFile> COFFFile;
 
 private:
-  ObjectFile(StringRef N, std::unique_ptr<COFFObject> *F)
+  ObjectFile(StringRef N, std::unique_ptr<COFFObjectFile> F)
     : Name(N), COFFFile(std::move(F)) {}
 
   std::unique_ptr<MemoryBuffer> MB;
@@ -122,8 +117,9 @@ class InputSection {
 public:
   InputSection(COFFObjectFile *F, const coff_section *S)
     : File(F), Section(S) {}
+
   bool IsCOMDAT() const {
-    return Section->Characteristics & IMAGE_SCN_LNK_COMDAT;
+    return Section->Characteristics & llvm::COFF::IMAGE_SCN_LNK_COMDAT;
   }
 
   COFFObjectFile *File;
@@ -134,7 +130,7 @@ public:
 
 typedef std::map<llvm::StringRef, SymbolRef> SymbolTable;
 
-} // namespace pecoff
+} // namespace coff
 } // namespace lld
 
 #endif
