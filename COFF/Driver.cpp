@@ -139,8 +139,8 @@ bool linkCOFF(int Argc, const char *Argv[]) {
   if (Res.reportRemainingUndefines())
     return false;
 
-  std::vector<std::unique_ptr<COFFObjectFile>> InFiles = Res.getFiles();
-  OutputFile OutFile(&InFiles);
+  std::vector<std::unique_ptr<COFFObjectFile>> *InFiles = Res.getFiles();
+  OutputFile OutFile(InFiles);
   OutFile.applyRelocations(&Symtab);  
   OutFile.write(getOutputPath(Args));
   return true;
