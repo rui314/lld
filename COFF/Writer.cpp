@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Symbol.h"
+#include "Reader.h"
 #include "Writer.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Object/COFF.h"

@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "Reader.h"
 #include "Resolver.h"
-#include "Symbol.h"
 #include "Writer.h"
 #include "lld/Core/Error.h"
 #include "llvm/ADT/ArrayRef.h"

@@ -10,7 +10,7 @@
 #ifndef LLD_COFF_RESOLVER_H
 #define LLD_COFF_RESOLVER_H
 
-#include "Symbol.h"
+#include "Reader.h"
 
 namespace lld {
 namespace coff {

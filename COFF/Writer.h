@@ -10,8 +10,8 @@
 #ifndef LLD_COFF_WRITER_H
 #define LLD_COFF_WRITER_H
 
+#include "Reader.h"
 #include "Resolver.h"
-#include "Symbol.h"
 #include "llvm/Support/FileOutputBuffer.h"
 #include <memory>
 #include <vector>
