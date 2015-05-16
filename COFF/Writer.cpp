@@ -194,6 +194,8 @@ void Writer::writeSections() {
     SectionTable[Idx++] = Out.Header;
   uint8_t *P = Buffer->getBufferStart();
   for (OutputSection &OSec : OutputSections) {
+    if (OSec.Name == ".text")
+      memset(P + OSec.Header.PointerToRawData, 0xCC, OSec.Header.SizeOfRawData);
     for (InputSection *ISec : OSec.InputSections) {
       ArrayRef<uint8_t> C = ISec->getContents();
       memcpy(P + ISec->FileOff, C.data(), C.size());
@@ -227,7 +229,7 @@ static void add64(uint8_t *Loc, int32_t Val) {
 void Writer::applyOneRelocation(InputSection *Sec, OutputSection *OSec,
 				const coff_relocation *Rel) {
   using namespace llvm::COFF;
-  uint64_t RelRVA = Rel->VirtualAddress;
+  uint64_t RelRVA = Sec->RVA + Rel->VirtualAddress;
   uint8_t *Off = Buffer->getBufferStart() + Sec->FileOff + Rel->VirtualAddress;
   ObjectFile *File = Sec->File;
   Defined *Sym = cast<Defined>(File->Symbols[Rel->SymbolTableIndex]->Ptr);
