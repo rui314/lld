@@ -30,7 +30,7 @@ std::error_code Resolver::addFile(std::unique_ptr<ObjectFile> File) {
     const coff_section *Sec;
     if (auto EC = Obj->getSection(I, Sec))
       return EC;
-    FileP->Sections.emplace_back(Obj, Sec);
+    FileP->Sections.emplace_back(FileP, Sec);
   }
 
   // Resolve symbols

@@ -120,30 +120,23 @@ private:
 
 class InputSection {
 public:
-  InputSection(COFFObjectFile *F, const coff_section *S)
+  InputSection(ObjectFile *F, const coff_section *S)
     : File(F), Section(S) {
     if (File && Section)
-      File->getSectionName(Section, Name);
+      File->COFFFile->getSectionName(Section, Name);
   }
 
   bool IsCOMDAT() const {
     return Section->Characteristics & llvm::COFF::IMAGE_SCN_LNK_COMDAT;
   }
 
-  ErrorOr<StringRef> getName() {
-    StringRef Name;
-    if (File->getSectionName(Section, Name))
-      return "";
-    return Name;
-  }
-
   ArrayRef<uint8_t> getContents() {
     ArrayRef<uint8_t> Res;
-    File->getSectionContents(Section, Res);
+    File->COFFFile->getSectionContents(Section, Res);
     return Res;
   }
 
-  COFFObjectFile *File;
+  ObjectFile *File;
   const coff_section *Section;
   StringRef Name;
   uint64_t RVA = 0;
