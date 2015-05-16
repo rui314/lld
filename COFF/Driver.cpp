@@ -74,8 +74,9 @@ getOutputPath(std::unique_ptr<llvm::opt::InputArgList> &Args) {
 }
 
 namespace lld {
+namespace coff {
 
-bool linkCOFF(int Argc, const char *Argv[]) {
+bool link(int Argc, const char *Argv[]) {
   COFFOptTable Table;
   unsigned MissingIndex;
   unsigned MissingCount;
@@ -98,10 +99,10 @@ bool linkCOFF(int Argc, const char *Argv[]) {
     return true;
   }
 
-  coff::Resolver Res;
+  Resolver Res;
   for (auto *Arg : Args->filtered(OPT_INPUT)) {
     StringRef Path = Arg->getValue();
-    ErrorOr<std::unique_ptr<coff::ObjectFile>> FileOrErr = coff::ObjectFile::create(Path);
+    ErrorOr<std::unique_ptr<ObjectFile>> FileOrErr = ObjectFile::create(Path);
     if (auto EC = FileOrErr.getError()) {
       llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";
       continue;
@@ -114,9 +115,10 @@ bool linkCOFF(int Argc, const char *Argv[]) {
   if (Res.reportRemainingUndefines())
     return false;
 
-  coff::Writer OutFile(&Res);
+  Writer OutFile(&Res);
   OutFile.write(getOutputPath(Args));
   return true;
 }
 
+}
 }

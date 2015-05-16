@@ -209,7 +209,7 @@ bool UniversalDriver::link(int argc, const char *argv[],
   case Flavor::win_link:
     return WinLinkDriver::linkPECOFF(args.size(), args.data(), diagnostics);
   case Flavor::win_link2:
-    return linkCOFF(args.size(), args.data());
+    return coff::link(args.size(), args.data());
   case Flavor::core:
     return CoreDriver::link(args.size(), args.data(), diagnostics);
   case Flavor::invalid:
