@@ -6,6 +6,7 @@ add_llvm_library(lldCOFF
   Driver.cpp
   Resolver.cpp
   Symbol.cpp
+  Writer.cpp
   )
 
 add_dependencies(lldCOFF COFFOptionsTableGen)

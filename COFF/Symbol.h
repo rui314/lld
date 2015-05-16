@@ -11,6 +11,7 @@
 #define LLD_COFF_SYMBOL_H
 
 #include "lld/Core/LLVM.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/Object/Archive.h"
 #include "llvm/Object/COFF.h"
 #include <map>
@@ -116,14 +117,31 @@ private:
 class InputSection {
 public:
   InputSection(COFFObjectFile *F, const coff_section *S)
-    : File(F), Section(S) {}
+    : File(F), Section(S) {
+    if (File && Section)
+      File->getSectionName(Section, Name);
+  }
 
   bool IsCOMDAT() const {
     return Section->Characteristics & llvm::COFF::IMAGE_SCN_LNK_COMDAT;
   }
 
+  ErrorOr<StringRef> getName() {
+    StringRef Name;
+    if (File->getSectionName(Section, Name))
+      return "";
+    return Name;
+  }
+
+  ArrayRef<uint8_t> getContents() {
+    ArrayRef<uint8_t> Res;
+    File->getSectionContents(Section, Res);
+    return Res;
+  }
+
   COFFObjectFile *File;
   const coff_section *Section;
+  StringRef Name;
   uint64_t RVA = 0;
   uint64_t FileOff = 0;
 };

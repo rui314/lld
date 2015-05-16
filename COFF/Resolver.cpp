@@ -18,24 +18,23 @@ namespace lld {
 namespace coff {
 
 std::error_code Resolver::addFile(std::unique_ptr<ObjectFile> File) {
+  ObjectFile *FileP = File.get();
   Files.push_back(std::move(File));
 
-  // Initialize File->Sections.
-  COFFObjectFile *Obj = File->COFFFile.get();
+  // Initialize File-S>ections.
+  COFFObjectFile *Obj = FileP->COFFFile.get();
   uint32_t NumSections = Obj->getNumberOfSections();
-  File->Sections.reserve(NumSections + 1);
-  // Sections are 1-based. Add a null entry to the beginning.
-  File->Sections.emplace_back(nullptr, nullptr);
+  FileP->Sections.reserve(NumSections + 1);
   for (uint32_t I = 1; I < NumSections + 1; ++I) {
     const coff_section *Sec;
     if (auto EC = Obj->getSection(I, Sec))
       return EC;
-    File->Sections.emplace_back(Obj, Sec);
+    FileP->Sections.emplace_back(Obj, Sec);
   }
 
   // Resolve symbols
   uint32_t NumSymbols = Obj->getNumberOfSymbols();
-  File->Symbols.reserve(NumSymbols);
+  FileP->Symbols.reserve(NumSymbols);
   for (uint32_t I = 0; I < NumSymbols; ++I) {
     // Get a COFFSymbolRef object.
     auto SrefOrErr = Obj->getSymbol(I);
@@ -56,7 +55,7 @@ std::error_code Resolver::addFile(std::unique_ptr<ObjectFile> File) {
       // the symbol vector because any symbols can be referred by
       // relocations.
       SymbolRef Ref = { Name, nullptr };
-      File->Symbols.push_back(&Ref);
+      FileP->Symbols.push_back(&Ref);
       continue;
     }
 
@@ -67,7 +66,7 @@ std::error_code Resolver::addFile(std::unique_ptr<ObjectFile> File) {
     Symbol *Sym = createSymbol(File.get(), Sref);
     if (auto EC = resolve(Ref, Sym))
       return EC;
-    File->Symbols.push_back(Ref);
+    FileP->Symbols.push_back(Ref);
   }
   return std::error_code();
 }
@@ -78,9 +77,9 @@ bool Resolver::reportRemainingUndefines() {
     if (!dyn_cast<Undefined>(Ref.Ptr))
       continue;
     llvm::errs() << "undefined symbol: " << Ref.Name << "\n";
-    return false;
+    return true;
   }
-  return true;
+  return false;
 }
 
 // This function takes two arguments, an existing symbol and a new

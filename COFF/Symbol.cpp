@@ -55,7 +55,7 @@ ArchiveFile::getMember(Archive::Symbol *Sym) {
   if (Seen.count(StartAddr))
     return nullptr;
   Seen.insert(StartAddr);
-      
+
   auto MBRefOrErr = It->getMemoryBufferRef();
   if (auto EC = MBRefOrErr.getError())
     return EC;
