@@ -48,6 +48,8 @@ public:
   Defined(ObjectFile *F, COFFSymbolRef SymRef);
   static bool classof(const Symbol *S) { return S->kind() == DefinedKind; }
   bool IsCOMDAT() const;
+  uint64_t getRVA();
+  uint64_t getFileOff();
 
   ObjectFile *File;
   COFFSymbolRef Sym;

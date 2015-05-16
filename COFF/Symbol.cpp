@@ -25,6 +25,14 @@ bool Defined::IsCOMDAT() const {
   return Section && Section->IsCOMDAT();
 }
 
+uint64_t Defined::getRVA() {
+  return Section->RVA + Sym.getValue();
+}
+
+uint64_t Defined::getFileOff() {
+  return Section->FileOff + Sym.getValue();
+}
+
 ErrorOr<std::unique_ptr<ObjectFile>> CanBeDefined::getMember() {
   return File->getMember(Sym);
 }

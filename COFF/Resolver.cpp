@@ -184,8 +184,7 @@ uint64_t Resolver::getRVA(StringRef Symbol) {
   if (It == Symtab.end())
     return 0;
   SymbolRef Ref = It->second;
-  auto *Def = cast<Defined>(Ref.Ptr);
-  return Def->Section->RVA + Def->Sym.getValue();
+  return cast<Defined>(Ref.Ptr)->getRVA();
 }
 
 } // namespace coff
