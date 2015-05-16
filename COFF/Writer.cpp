@@ -153,7 +153,6 @@ void Writer::writeHeader() {
   P += sizeof(pe32plus_header);
   PE->Magic = llvm::COFF::PE32Header::PE32_PLUS;
   PE->ImageBase = 0x140000000;
-  PE->AddressOfEntryPoint = 0x2000;
   PE->SectionAlignment = SectionAlignment;
   PE->FileAlignment = FileAlignment;
   PE->MajorOperatingSystemVersion = 6;
@@ -203,6 +202,7 @@ void Writer::backfillHeaders() {
   for (OutputSection &Out : OutputSections) {
     if (Out.Name == ".text") {
       PE->SizeOfCode = Out.Header.SizeOfRawData;
+      PE->AddressOfEntryPoint = Out.Header.VirtualAddress;
       PE->BaseOfCode = Out.Header.VirtualAddress;
       return;
     }

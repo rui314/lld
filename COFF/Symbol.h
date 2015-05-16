@@ -76,7 +76,7 @@ public:
 
 struct SymbolRef {
   StringRef Name;
-  Symbol *Ptr;
+  Symbol *Ptr = nullptr;
 };
 
 class ArchiveFile {

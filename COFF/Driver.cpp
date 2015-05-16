@@ -106,7 +106,10 @@ bool linkCOFF(int Argc, const char *Argv[]) {
       llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";
       continue;
     }
-    Res.addFile(std::move(FileOrErr.get()));
+    if (auto EC = Res.addFile(std::move(FileOrErr.get()))) {
+      llvm::errs() << "addFile failed: " << Path << ": " << EC.message() << "\n";
+      return false;
+    }
   }
   if (Res.reportRemainingUndefines())
     return false;

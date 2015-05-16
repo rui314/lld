@@ -9,6 +9,7 @@
 
 #include "Resolver.h"
 #include "lld/Core/Error.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
 using llvm::object::Binary;
@@ -34,7 +35,7 @@ std::error_code Resolver::addFile(std::unique_ptr<ObjectFile> File) {
 
   // Resolve symbols
   uint32_t NumSymbols = Obj->getNumberOfSymbols();
-  FileP->Symbols.reserve(NumSymbols);
+  FileP->Symbols.resize(NumSymbols);
   for (uint32_t I = 0; I < NumSymbols; ++I) {
     // Get a COFFSymbolRef object.
     auto SrefOrErr = Obj->getSymbol(I);
@@ -54,19 +55,22 @@ std::error_code Resolver::addFile(std::unique_ptr<ObjectFile> File) {
       // We still want to add all symbols, including internal ones, to
       // the symbol vector because any symbols can be referred by
       // relocations.
-      SymbolRef Ref = { Name, nullptr };
-      FileP->Symbols.push_back(&Ref);
-      continue;
+      llvm::dbgs() << "Add " << Name << "\n";
+      SymbolRef Ref;
+      Ref.Name = Name;
+      FileP->Symbols[I] = &Ref;
+    } else {
+      // We now have an externally-visible symbol. Create a symbol
+      // wrapper object and add it to the symbol table if there's no
+      // existing one. If there's an existing one, resolve the conflict.
+      SymbolRef *Ref = &Symtab[Name];
+      Ref->Name = Name;
+      Symbol *Sym = createSymbol(FileP, Sref);
+      if (auto EC = resolve(Ref, Sym))
+	return EC;
+      FileP->Symbols[I] = Ref;
     }
-
-    // We now have an externally-visible symbol. Create a symbol
-    // wrapper object and add it to the symbol table if there's no
-    // existing one. If there's an existing one, resolve the conflict.
-    SymbolRef *Ref = &Symtab[Name];
-    Symbol *Sym = createSymbol(File.get(), Sref);
-    if (auto EC = resolve(Ref, Sym))
-      return EC;
-    FileP->Symbols.push_back(Ref);
+    I += Sref.getNumberOfAuxSymbols();
   }
   return std::error_code();
 }
@@ -113,6 +117,7 @@ bool Resolver::reportRemainingUndefines() {
 // It's an error if they are not COMDAT.
 std::error_code
 Resolver::resolve(SymbolRef *Ref, Symbol *Sym) {
+  llvm::dbgs() << "Resolving " << Ref->Name << "\n";
   // If nothing exists yet, just add a new one.
   if (Ref->Ptr == nullptr) {
     Ref->Ptr = Sym;
