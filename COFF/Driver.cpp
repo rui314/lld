@@ -70,7 +70,8 @@ static std::string
 getOutputPath(std::unique_ptr<llvm::opt::InputArgList> &Args) {
   if (auto *Arg = Args->getLastArg(OPT_out))
     return Arg->getValue();
-  SmallString<128> Val = Args->getLastArg(OPT_INPUT)[0].getValue();
+  auto *Arg = *Args->filtered_begin(OPT_INPUT);
+  SmallString<128> Val = Arg->getValue();
   llvm::sys::path::replace_extension(Val, ".exe");
   return Val.str();
 }
