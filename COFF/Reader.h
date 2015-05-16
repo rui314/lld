@@ -30,6 +30,7 @@ namespace coff {
 
 class ArchiveFile;
 class InputSection;
+class OutputSection;
 class ObjectFile;
 
 class Symbol {
@@ -41,6 +42,7 @@ public:
     CanBeDefinedKind,
   };
   Kind kind() const { return SymbolKind; }
+  virtual ~Symbol() {}
 
 protected:
   Symbol(Kind K) : SymbolKind(K) {}
@@ -56,10 +58,7 @@ public:
     Kind K = S->kind();
     return K == DefinedRegularKind || K == DefinedImplibKind;
   }
-  bool IsCOMDAT() const { return IsCOMDATVal; }
-
-protected:
-  bool IsCOMDATVal = false;
+  virtual bool isCOMDAT() const { return false; }
 };
 
 class DefinedRegular : public Defined {
@@ -71,6 +70,7 @@ public:
 
   uint64_t getRVA();
   uint64_t getFileOff();
+  bool isCOMDAT() const override;
 
   ObjectFile *File;
   COFFSymbolRef Sym;
@@ -82,8 +82,7 @@ public:
   CanBeDefined(ArchiveFile *F, const Archive::Symbol *S)
     : Symbol(CanBeDefinedKind), File(F), Sym(S) {}
   static bool classof(const Symbol *S) { return S->kind() == CanBeDefinedKind; }
-
-  ErrorOr<std::unique_ptr<ObjectFile>> getMember();
+  ErrorOr<MemoryBufferRef> getMember();
 
   ArchiveFile *File;
   const Archive::Symbol *Sym;
@@ -110,7 +109,8 @@ public:
 
   std::string Name;
   std::unique_ptr<Archive> File;
-  ErrorOr<std::unique_ptr<ObjectFile>> getMember(const Archive::Symbol *Sym);
+
+  ErrorOr<MemoryBufferRef> getMember(const Archive::Symbol *Sym);
 
 private:
   ArchiveFile(StringRef N, std::unique_ptr<Archive> F,
@@ -141,30 +141,59 @@ private:
   std::unique_ptr<MemoryBuffer> MB;
 };
 
-class InputSection {
+class Chunk {
 public:
-  InputSection(ObjectFile *F, const coff_section *S)
-    : File(F), Section(S) {
-    if (File && Section)
-      File->COFFFile->getSectionName(Section, Name);
-  }
-
-  bool IsCOMDAT() const {
-    return Section->Characteristics & llvm::COFF::IMAGE_SCN_LNK_COMDAT;
-  }
-
-  ArrayRef<uint8_t> getContents() {
-    ArrayRef<uint8_t> Res;
-    File->COFFFile->getSectionContents(Section, Res);
-    return Res;
-  }
-
-  ObjectFile *File;
-  const coff_section *Section;
-  StringRef Name;
+  ArrayRef<uint8_t> Data;
   uint64_t RVA = 0;
   uint64_t FileOff = 0;
+  uint64_t Align = 0;
+  virtual void applyRelocations(uint8_t *Buffer) = 0;
 };
+
+class SectionChunk : public Chunk {
+public:
+  SectionChunk(InputSection *S) : Section(S) {}
+  void applyRelocations(uint8_t *Buffer) override;
+  InputSection *Section;
+};
+
+class InputSection {
+public:
+  InputSection(ObjectFile *F, const coff_section *H)
+    : File(F), Header(H), Chunk(this) {
+    F->COFFFile->getSectionName(H, Name);
+    F->COFFFile->getSectionContents(H, Chunk.Data);
+    Chunk.Align = getAlign();
+  }
+
+  bool isCOMDAT() const;
+  void applyRelocations(uint8_t *Buffer);
+
+  ObjectFile *File;
+  const coff_section *Header;
+  SectionChunk Chunk;
+  StringRef Name;
+  OutputSection *Out = nullptr;
+
+private:
+  void applyRelocation(uint8_t *Buffer, const coff_relocation *Rel);
+  uint64_t getAlign() const;
+};
+
+class OutputSection {
+public:
+  OutputSection(StringRef N, uint32_t SI,
+		std::vector<InputSection *> *InputSections);
+  void setRVA(uint64_t);
+  void setFileOffset(uint64_t);
+
+  StringRef Name;
+  uint32_t SectionIndex;
+  llvm::object::coff_section Header;
+  std::vector<Chunk *> Chunks;
+};
+
+
 
 typedef std::map<llvm::StringRef, SymbolRef> SymbolTable;
 

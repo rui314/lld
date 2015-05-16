@@ -28,19 +28,7 @@ const int HeaderSize = DOSStubSize + sizeof(llvm::COFF::PEMagic)
   + sizeof(llvm::object::coff_file_header)
   + sizeof(llvm::object::pe32plus_header)
   + sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
-
-class OutputSection {
-public:
-  OutputSection(StringRef N, uint32_t SI,
-		std::vector<InputSection *> &&Sections);
-  void setRVA(uint64_t);
-  void setFileOffset(uint64_t);
-
-  StringRef Name;
-  llvm::object::coff_section Header;
-  std::vector<InputSection *> InputSections;
-  uint32_t SectionIndex;
-};
+const uint64_t ImageBase = 0x140000000;
 
 class Writer {
 public:
@@ -56,9 +44,7 @@ private:
   void writeSections();
   void applyRelocations();
   void backfillHeaders();
-
-  void applyOneRelocation(InputSection *Sec, OutputSection *OSec,
-			  const coff_relocation *Rel);
+  OutputSection *findSection(StringRef name);
 
   Resolver *Res;
   std::unique_ptr<llvm::FileOutputBuffer> Buffer;
@@ -66,7 +52,7 @@ private:
   llvm::object::pe32plus_header *PE;
   llvm::object::data_directory *DataDirectory;
   llvm::object::coff_section *SectionTable;
-  std::vector<OutputSection> OutputSections;
+  std::vector<std::unique_ptr<OutputSection>> OutputSections;
 
   uint64_t EndOfSectionTable;
   uint64_t SectionTotalSizeDisk;

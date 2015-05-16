@@ -10,7 +10,7 @@
 #include "Reader.h"
 #include "Writer.h"
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/Object/COFF.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/FileOutputBuffer.h"
@@ -21,13 +21,12 @@
 
 using namespace llvm;
 using namespace llvm::object;
-using namespace llvm::support::endian;
 
 namespace lld {
 namespace coff {
 
 static uint64_t getSectionAlignment(const InputSection *Sec) {
-  unsigned Shift = ((Sec->Section->Characteristics & 0x00F00000) >> 20) - 1;
+  unsigned Shift = ((Sec->Header->Characteristics & 0x00F00000) >> 20) - 1;
   return uint64_t(1) << Shift;
 }
 
@@ -44,7 +43,6 @@ mergeCharacteristics(const coff_section &A, const coff_section &B) {
   return (A.Characteristics | B.Characteristics) & Mask;
 }
 
-
 static void sortByName(std::vector<InputSection *> *Sections) {
   auto comp = [](const InputSection *A, const InputSection *B) {
     return A->Name < B->Name;
@@ -53,18 +51,20 @@ static void sortByName(std::vector<InputSection *> *Sections) {
 }
 
 OutputSection::OutputSection(StringRef N, uint32_t SI,
-			     std::vector<InputSection *> &&Sections)
-  : Name(N), SectionIndex(SI), InputSections(std::move(Sections)) {
+			     std::vector<InputSection *> *InputSections)
+  : Name(N), SectionIndex(SI) {
   memset(&Header, 0, sizeof(Header));
-  sortByName(&InputSections);
-    
+  sortByName(InputSections);
+
   uint64_t Off = 0;
-  for (InputSection *Sec : InputSections) {
-    Off = RoundUpToAlignment(Off, getSectionAlignment(Sec));
-    Sec->RVA = Off;
-    Sec->FileOff = Off;
-    Off += Sec->Section->SizeOfRawData;
-    Header.Characteristics = mergeCharacteristics(Header, *Sec->Section);
+  for (InputSection *Sec : *InputSections) {
+    Chunk *C = &Sec->Chunk;
+    Off = RoundUpToAlignment(Off, C->Align);
+    C->RVA = Off;
+    C->FileOff = Off;
+    Chunks.push_back(C);
+    Off += C->Data.size();
+    Header.Characteristics = mergeCharacteristics(Header, *Sec->Header);
   }
   Header.VirtualSize = Off;
   Header.SizeOfRawData = RoundUpToAlignment(Off, FileAlignment);
@@ -75,14 +75,14 @@ OutputSection::OutputSection(StringRef N, uint32_t SI,
 
 void OutputSection::setRVA(uint64_t RVA) {
   Header.VirtualAddress = RVA;
-  for (InputSection *Sec : InputSections)
-    Sec->RVA += RVA;
+  for (Chunk *C : Chunks)
+    C->RVA += RVA;
 }
 
 void OutputSection::setFileOffset(uint64_t Off) {
   Header.PointerToRawData = Off;
-  for (InputSection *Sec : InputSections)
-    Sec->FileOff += Off;
+  for (Chunk *C : Chunks)
+    C->FileOff += Off;
 }
 
 void Writer::groupSections() {
@@ -95,15 +95,19 @@ void Writer::groupSections() {
   for (auto &P : Map) {
     StringRef SectionName = P.first;
     std::vector<InputSection *> &Sections = P.second;
-    OutputSections.emplace_back(SectionName, Index++, std::move(Sections));
+    std::unique_ptr<OutputSection> OSec(
+      new OutputSection(SectionName, Index++, &Sections));
+    for (InputSection *ISec : Sections)
+      ISec->Out = OSec.get();
+    OutputSections.push_back(std::move(OSec));
   }
   EndOfSectionTable = RoundUpToAlignment(
     HeaderSize + sizeof(coff_section) * OutputSections.size(), PageSize);
 }
 
 void Writer::removeEmptySections() {
-  auto IsEmpty = [](const OutputSection &S) {
-    return S.Header.VirtualSize == 0;
+  auto IsEmpty = [](const std::unique_ptr<OutputSection> &S) {
+    return S->Header.VirtualSize == 0;
   };
   OutputSections.erase(std::remove_if(OutputSections.begin(),
 				      OutputSections.end(),
@@ -116,18 +120,18 @@ void Writer::assignAddresses() {
   uint64_t FileOff = EndOfSectionTable;
   uint64_t InitRVA = RVA;
   uint64_t InitFileOff = FileOff;
-  for (OutputSection &Out : OutputSections) {
-    Out.setRVA(RVA);
-    Out.setFileOffset(FileOff);
-    RVA += RoundUpToAlignment(Out.Header.VirtualSize, PageSize);
-    FileOff += RoundUpToAlignment(Out.Header.SizeOfRawData, FileAlignment);
+  for (std::unique_ptr<OutputSection> &Out : OutputSections) {
+    Out->setRVA(RVA);
+    Out->setFileOffset(FileOff);
+    RVA += RoundUpToAlignment(Out->Header.VirtualSize, PageSize);
+    FileOff += RoundUpToAlignment(Out->Header.SizeOfRawData, FileAlignment);
   }
   SectionTotalSizeMemory = RoundUpToAlignment(RVA - InitRVA, PageSize);
   SectionTotalSizeDisk = RoundUpToAlignment(FileOff - InitFileOff, FileAlignment);
 }
 
 void Writer::writeHeader() {
-  // Write DOS stub header
+  // Write DOS stub
   uint8_t *P = Buffer->getBufferStart();
   auto *DOS = reinterpret_cast<dos_header *>(P);
   P += DOSStubSize;
@@ -155,7 +159,7 @@ void Writer::writeHeader() {
   PE = reinterpret_cast<pe32plus_header *>(P);
   P += sizeof(pe32plus_header);
   PE->Magic = llvm::COFF::PE32Header::PE32_PLUS;
-  PE->ImageBase = 0x140000000;
+  PE->ImageBase = ImageBase;
   PE->SectionAlignment = SectionAlignment;
   PE->FileAlignment = FileAlignment;
   PE->MajorOperatingSystemVersion = 6;
@@ -190,88 +194,38 @@ void Writer::openFile(StringRef OutputPath) {
 
 void Writer::writeSections() {
   int Idx = 0;
-  for (OutputSection &Out : OutputSections)
-    SectionTable[Idx++] = Out.Header;
+  for (std::unique_ptr<OutputSection> &Out : OutputSections)
+    SectionTable[Idx++] = Out->Header;
   uint8_t *P = Buffer->getBufferStart();
-  for (OutputSection &OSec : OutputSections) {
-    if (OSec.Name == ".text")
-      memset(P + OSec.Header.PointerToRawData, 0xCC, OSec.Header.SizeOfRawData);
-    for (InputSection *ISec : OSec.InputSections) {
-      ArrayRef<uint8_t> C = ISec->getContents();
-      memcpy(P + ISec->FileOff, C.data(), C.size());
-    }
+  for (std::unique_ptr<OutputSection> &OSec : OutputSections) {
+    if (OSec->Name == ".text")
+      memset(P + OSec->Header.PointerToRawData, 0xCC, OSec->Header.SizeOfRawData);
+    for (Chunk *C : OSec->Chunks)
+      memcpy(P + C->FileOff, C->Data.data(), C->Data.size());
   }
 }
 
 void Writer::backfillHeaders() {
   PE->AddressOfEntryPoint = Res->getRVA("main");
-  for (OutputSection &Out : OutputSections) {
-    if (Out.Name == ".text") {
-      PE->SizeOfCode = Out.Header.SizeOfRawData;
-      PE->BaseOfCode = Out.Header.VirtualAddress;
-      return;
-    }
+  OutputSection *Text = findSection(".text");
+  if (Text) {
+    PE->SizeOfCode = Text->Header.SizeOfRawData;
+    PE->BaseOfCode = Text->Header.VirtualAddress;
   }
 }
 
-static void add16(uint8_t *Loc, int32_t Val) {
-  write16le(Loc, read16le(Loc) + Val);
-}
-
-static void add32(uint8_t *Loc, int32_t Val) {
-  write32le(Loc, read32le(Loc) + Val);
-}
-
-static void add64(uint8_t *Loc, int32_t Val) {
-  write64le(Loc, read64le(Loc) + Val);
-}
-
-void Writer::applyOneRelocation(InputSection *Sec, OutputSection *OSec,
-				const coff_relocation *Rel) {
-  using namespace llvm::COFF;
-  uint64_t RelRVA = Sec->RVA + Rel->VirtualAddress;
-  uint8_t *Off = Buffer->getBufferStart() + Sec->FileOff + Rel->VirtualAddress;
-  ObjectFile *File = Sec->File;
-  auto *Sym = cast<DefinedRegular>(File->Symbols[Rel->SymbolTableIndex]->Ptr);
-  if (Rel->Type == IMAGE_REL_AMD64_ADDR32) {
-    add32(Off, Sym->getRVA() + 0x140000000);
-  } else if (Rel->Type == IMAGE_REL_AMD64_ADDR64) {
-    add64(Off, Sym->getRVA() + 0x140000000);
-  } else if (Rel->Type == IMAGE_REL_AMD64_ADDR32NB) {
-    add32(Off, Sym->getRVA());
-  } else if (Rel->Type == IMAGE_REL_AMD64_REL32) {
-    add32(Off, Sym->getRVA() - RelRVA - 4);
-  } else if (Rel->Type == IMAGE_REL_AMD64_REL32_1) {
-    add32(Off, Sym->getRVA() - RelRVA - 5);
-  } else if (Rel->Type == IMAGE_REL_AMD64_REL32_2) {
-    add32(Off, Sym->getRVA() - RelRVA - 6);
-  } else if (Rel->Type == IMAGE_REL_AMD64_REL32_3) {
-    add32(Off, Sym->getRVA() - RelRVA - 7);
-  } else if (Rel->Type == IMAGE_REL_AMD64_REL32_4) {
-    add32(Off, Sym->getRVA() - RelRVA - 8);
-  } else if (Rel->Type == IMAGE_REL_AMD64_REL32_5) {
-    add32(Off, Sym->getRVA() - RelRVA - 9);
-  } else if (Rel->Type == IMAGE_REL_AMD64_SECTION) {
-    add16(Off, OSec->SectionIndex);
-  } else if (Rel->Type == IMAGE_REL_AMD64_SECREL) {
-    add32(Off, Sym->getRVA() - OSec->Header.VirtualAddress);
-  } else {
-    llvm::report_fatal_error("Unsupported relocation type");
-  }
+OutputSection *Writer::findSection(StringRef name) {
+  for (std::unique_ptr<OutputSection> &S : OutputSections)
+    if (S->Name == name)
+      return S.get();
+  return nullptr;
 }
 
 void Writer::applyRelocations() {
-  for (OutputSection &OSec : OutputSections) {
-    for (InputSection *ISec : OSec.InputSections) {
-      DataRefImpl Ref;
-      Ref.p = uintptr_t(ISec->Section);
-      COFFObjectFile *FP = ISec->File->COFFFile.get();
-      for (const auto &I : SectionRef(Ref, FP).relocations()) {
-	const coff_relocation *Rel = FP->getCOFFRelocation(I);
-	applyOneRelocation(ISec, &OSec, Rel);
-      }
-    }
-  }
+  uint8_t *Buf = Buffer->getBufferStart();
+  for (std::unique_ptr<OutputSection> &Sec : OutputSections)
+    for (Chunk *C : Sec->Chunks)
+      C->applyRelocations(Buf);
 }
 
 void Writer::write(StringRef OutputPath) {

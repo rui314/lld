@@ -9,11 +9,15 @@
 
 #include "Resolver.h"
 #include "lld/Core/Error.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/FileUtilities.h"
 #include "llvm/Support/raw_ostream.h"
 
 using llvm::object::Binary;
 using llvm::object::createBinary;
+using llvm::sys::fs::file_magic;
+using llvm::sys::fs::identify_magic;
 
 namespace lld {
 namespace coff {
@@ -123,7 +127,8 @@ bool Resolver::reportRemainingUndefines() {
 // It's an error if they are not COMDAT.
 std::error_code
 Resolver::resolve(SymbolRef *Ref, Symbol *Sym) {
-  llvm::dbgs() << "Resolving " << Ref->Name << "\n";
+  if (Ref->Name == "__imp_lstrcat")
+    llvm::dbgs() << "Resolving " << Ref->Name << "\n";
   // If nothing exists yet, just add a new one.
   if (Ref->Ptr == nullptr) {
     Ref->Ptr = Sym;
@@ -157,26 +162,34 @@ Resolver::resolve(SymbolRef *Ref, Symbol *Sym) {
   if (isa<Undefined>(Sym) || isa<CanBeDefined>(Sym))
     return std::error_code();
   Defined *New = cast<Defined>(Sym);
-  if (Existing->IsCOMDAT() && New->IsCOMDAT())
+  if (Existing->isCOMDAT() && New->isCOMDAT())
       return std::error_code();
   return make_dynamic_error_code(Twine("Duplicate symbol: ") + Ref->Name);
 }
 
 std::error_code Resolver::addMemberFile(CanBeDefined *Sym) {
-  ErrorOr<std::unique_ptr<ObjectFile>> MemberOrErr = Sym->getMember();
-  if (auto EC = MemberOrErr.getError())
+  auto MBRefOrErr = Sym->getMember();
+  if (auto EC = MBRefOrErr.getError())
     return EC;
-  std::unique_ptr<ObjectFile> MemberFile = std::move(MemberOrErr.get());
-  if (!MemberFile) {
-    // getMember returns a nullptr if the member was already read
-    // from the library. We add symbols to the symbol table
-    // one-by-one, and we could observe a transient state that an
-    // in-library symbol is being resolved but not added to the
-    // symbol table yet. If that's the case, we'll just let them
-    // go. Do nothing.
+  MemoryBufferRef MBRef = MBRefOrErr.get();
+
+  // getMember returns an empty buffer if the member was already
+  // read from the library.
+  if (MBRef.getBuffer().empty())
     return std::error_code();
+
+  file_magic Magic = identify_magic(StringRef(MBRef.getBuffer()));
+  StringRef Filename = MBRef.getBufferIdentifier();
+  if (Magic != file_magic::coff_object) {
+    return make_dynamic_error_code(
+      Twine("unknown file in a library: ") + Filename);
   }
-  return addFile(std::move(MemberFile));
+
+  auto FileOrErr = ObjectFile::create(Filename, MBRef);
+  if (auto EC = FileOrErr.getError())
+    return EC;
+  std::unique_ptr<ObjectFile> Obj = std::move(FileOrErr.get());
+  return addFile(std::move(Obj));
 }
 
 Symbol *Resolver::createSymbol(ObjectFile *File, COFFSymbolRef Sym) {
