@@ -232,7 +232,7 @@ void Writer::applyOneRelocation(InputSection *Sec, OutputSection *OSec,
   uint64_t RelRVA = Sec->RVA + Rel->VirtualAddress;
   uint8_t *Off = Buffer->getBufferStart() + Sec->FileOff + Rel->VirtualAddress;
   ObjectFile *File = Sec->File;
-  Defined *Sym = cast<Defined>(File->Symbols[Rel->SymbolTableIndex]->Ptr);
+  auto *Sym = cast<DefinedRegular>(File->Symbols[Rel->SymbolTableIndex]->Ptr);
   if (Rel->Type == IMAGE_REL_AMD64_ADDR32) {
     add32(Off, Sym->getRVA() + 0x140000000);
   } else if (Rel->Type == IMAGE_REL_AMD64_ADDR64) {

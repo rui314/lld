@@ -17,19 +17,17 @@ using llvm::object::createBinary;
 namespace lld {
 namespace coff {
 
-Defined::Defined(ObjectFile *F, COFFSymbolRef SymRef)
-  : Symbol(DefinedKind), File(F), Sym(SymRef),
-    Section(&File->Sections[Sym.getSectionNumber() - 1]) {}
-
-bool Defined::IsCOMDAT() const {
-  return Section && Section->IsCOMDAT();
+DefinedRegular::DefinedRegular(ObjectFile *F, COFFSymbolRef SymRef)
+  : Defined(DefinedRegularKind), File(F), Sym(SymRef),
+    Section(&File->Sections[Sym.getSectionNumber() - 1]) {
+  IsCOMDATVal = Section->IsCOMDAT();
 }
 
-uint64_t Defined::getRVA() {
+uint64_t DefinedRegular::getRVA() {
   return Section->RVA + Sym.getValue();
 }
 
-uint64_t Defined::getFileOff() {
+uint64_t DefinedRegular::getFileOff() {
   return Section->FileOff + Sym.getValue();
 }
 

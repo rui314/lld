@@ -64,7 +64,7 @@ public:
     : OptTable(infoTable, llvm::array_lengthof(infoTable),
 	       /* ignoreCase */ true) {}
 };
-} // anonymous namespace
+}
 
 static std::string
 getOutputPath(std::unique_ptr<llvm::opt::InputArgList> &Args) {

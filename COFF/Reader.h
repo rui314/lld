@@ -34,7 +34,12 @@ class ObjectFile;
 
 class Symbol {
 public:
-  enum Kind { DefinedKind, UndefinedKind, CanBeDefinedKind };
+  enum Kind {
+    DefinedRegularKind,
+    DefinedImplibKind,
+    UndefinedKind,
+    CanBeDefinedKind,
+  };
   Kind kind() const { return SymbolKind; }
 
 protected:
@@ -46,9 +51,24 @@ private:
 
 class Defined : public Symbol {
 public:
-  Defined(ObjectFile *F, COFFSymbolRef SymRef);
-  static bool classof(const Symbol *S) { return S->kind() == DefinedKind; }
-  bool IsCOMDAT() const;
+  Defined(Kind K) : Symbol(K) {}
+  static bool classof(const Symbol *S) {
+    Kind K = S->kind();
+    return K == DefinedRegularKind || K == DefinedImplibKind;
+  }
+  bool IsCOMDAT() const { return IsCOMDATVal; }
+
+protected:
+  bool IsCOMDATVal = false;
+};
+
+class DefinedRegular : public Defined {
+public:
+  DefinedRegular(ObjectFile *F, COFFSymbolRef SymRef);
+  static bool classof(const Symbol *S) {
+    return S->kind() == DefinedRegularKind;
+  }
+
   uint64_t getRVA();
   uint64_t getFileOff();
 

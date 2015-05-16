@@ -182,7 +182,7 @@ std::error_code Resolver::addMemberFile(CanBeDefined *Sym) {
 Symbol *Resolver::createSymbol(ObjectFile *File, COFFSymbolRef Sym) {
   if (Sym.isUndefined())
     return new (Alloc) Undefined(File);
-  return new (Alloc) Defined(File, Sym);
+  return new (Alloc) DefinedRegular(File, Sym);
 }
 
 uint64_t Resolver::getRVA(StringRef Symbol) {
@@ -190,7 +190,7 @@ uint64_t Resolver::getRVA(StringRef Symbol) {
   if (It == Symtab.end())
     return 0;
   SymbolRef Ref = It->second;
-  return cast<Defined>(Ref.Ptr)->getRVA();
+  return cast<DefinedRegular>(Ref.Ptr)->getRVA();
 }
 
 } // namespace coff
