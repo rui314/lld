@@ -12,6 +12,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/Endian.h"
 #include "llvm/Support/FileOutputBuffer.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
@@ -20,6 +21,7 @@
 
 using namespace llvm;
 using namespace llvm::object;
+using namespace llvm::support::endian;
 
 namespace lld {
 namespace coff {
@@ -50,9 +52,9 @@ static void sortByName(std::vector<InputSection *> *Sections) {
   std::stable_sort(Sections->begin(), Sections->end(), comp);
 }
 
-OutputSection::OutputSection(StringRef N,
+OutputSection::OutputSection(StringRef N, uint32_t SI,
 			     std::vector<InputSection *> &&Sections)
-  : Name(N), InputSections(std::move(Sections)) {
+  : Name(N), SectionIndex(SI), InputSections(std::move(Sections)) {
   memset(&Header, 0, sizeof(Header));
   sortByName(&InputSections);
     
@@ -89,10 +91,11 @@ void Writer::groupSections() {
     for (InputSection &Sec : File->Sections)
       Map[stripDollar(Sec.Name)].push_back(&Sec);
 
-  for (auto &I : Map) {
-    StringRef SectionName = I.first;
-    std::vector<InputSection *> &Sections = I.second;
-    OutputSections.emplace_back(SectionName, std::move(Sections));
+  uint32_t Index = 0;
+  for (auto &P : Map) {
+    StringRef SectionName = P.first;
+    std::vector<InputSection *> &Sections = P.second;
+    OutputSections.emplace_back(SectionName, Index++, std::move(Sections));
   }
   EndOfSectionTable = RoundUpToAlignment(
     HeaderSize + sizeof(coff_section) * OutputSections.size(), PageSize);
@@ -209,6 +212,66 @@ void Writer::backfillHeaders() {
   }
 }
 
+static void add16(uint8_t *Loc, int32_t Val) {
+  write16le(Loc, read16le(Loc) + Val);
+}
+
+static void add32(uint8_t *Loc, int32_t Val) {
+  write32le(Loc, read32le(Loc) + Val);
+}
+
+static void add64(uint8_t *Loc, int32_t Val) {
+  write64le(Loc, read64le(Loc) + Val);
+}
+
+void Writer::applyOneRelocation(InputSection *Sec, OutputSection *OSec,
+				const coff_relocation *Rel) {
+  using namespace llvm::COFF;
+  uint64_t RelRVA = Rel->VirtualAddress;
+  uint8_t *Off = Buffer->getBufferStart() + Sec->FileOff + Rel->VirtualAddress;
+  ObjectFile *File = Sec->File;
+  Defined *Sym = cast<Defined>(File->Symbols[Rel->SymbolTableIndex]->Ptr);
+  if (Rel->Type == IMAGE_REL_AMD64_ADDR32) {
+    add32(Off, Sym->getRVA() + 0x140000000);
+  } else if (Rel->Type == IMAGE_REL_AMD64_ADDR64) {
+    add64(Off, Sym->getRVA() + 0x140000000);
+  } else if (Rel->Type == IMAGE_REL_AMD64_ADDR32NB) {
+    add32(Off, Sym->getRVA());
+  } else if (Rel->Type == IMAGE_REL_AMD64_REL32) {
+    add32(Off, Sym->getRVA() - RelRVA - 4);
+  } else if (Rel->Type == IMAGE_REL_AMD64_REL32_1) {
+    add32(Off, Sym->getRVA() - RelRVA - 5);
+  } else if (Rel->Type == IMAGE_REL_AMD64_REL32_2) {
+    add32(Off, Sym->getRVA() - RelRVA - 6);
+  } else if (Rel->Type == IMAGE_REL_AMD64_REL32_3) {
+    add32(Off, Sym->getRVA() - RelRVA - 7);
+  } else if (Rel->Type == IMAGE_REL_AMD64_REL32_4) {
+    add32(Off, Sym->getRVA() - RelRVA - 8);
+  } else if (Rel->Type == IMAGE_REL_AMD64_REL32_5) {
+    add32(Off, Sym->getRVA() - RelRVA - 9);
+  } else if (Rel->Type == IMAGE_REL_AMD64_SECTION) {
+    add16(Off, OSec->SectionIndex);
+  } else if (Rel->Type == IMAGE_REL_AMD64_SECREL) {
+    add32(Off, Sym->getRVA() - OSec->Header.VirtualAddress);
+  } else {
+    llvm::report_fatal_error("Unsupported relocation type");
+  }
+}
+
+void Writer::applyRelocations() {
+  for (OutputSection &OSec : OutputSections) {
+    for (InputSection *ISec : OSec.InputSections) {
+      DataRefImpl Ref;
+      Ref.p = uintptr_t(ISec->Section);
+      COFFObjectFile *FP = ISec->File->COFFFile.get();
+      for (const auto &I : SectionRef(Ref, FP).relocations()) {
+	const coff_relocation *Rel = FP->getCOFFRelocation(I);
+	applyOneRelocation(ISec, &OSec, Rel);
+      }
+    }
+  }
+}
+
 void Writer::write(StringRef OutputPath) {
   groupSections();
   assignAddresses();
@@ -216,6 +279,7 @@ void Writer::write(StringRef OutputPath) {
   openFile(OutputPath);
   writeHeader();
   writeSections();
+  applyRelocations();
   backfillHeaders();
   Buffer->commit();
 }

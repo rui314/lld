@@ -22,6 +22,7 @@
 using llvm::object::Archive;
 using llvm::object::COFFObjectFile;
 using llvm::object::COFFSymbolRef;
+using llvm::object::coff_relocation;
 using llvm::object::coff_section;
 
 namespace lld {

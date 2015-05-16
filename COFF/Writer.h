@@ -31,13 +31,15 @@ const int HeaderSize = DOSStubSize + sizeof(llvm::COFF::PEMagic)
 
 class OutputSection {
 public:
-  OutputSection(StringRef N, std::vector<InputSection *> &&Sections);
+  OutputSection(StringRef N, uint32_t SI,
+		std::vector<InputSection *> &&Sections);
   void setRVA(uint64_t);
   void setFileOffset(uint64_t);
 
   StringRef Name;
   llvm::object::coff_section Header;
   std::vector<InputSection *> InputSections;
+  uint32_t SectionIndex;
 };
 
 class Writer {
@@ -46,13 +48,17 @@ public:
   void write(StringRef Path);
 
 private:
-  void openFile(StringRef OutputPath);
-  void writeHeader();
-  void removeEmptySections();
   void groupSections();
   void assignAddresses();
-  void backfillHeaders();
+  void removeEmptySections();
+  void openFile(StringRef OutputPath);
+  void writeHeader();
   void writeSections();
+  void applyRelocations();
+  void backfillHeaders();
+
+  void applyOneRelocation(InputSection *Sec, OutputSection *OSec,
+			  const coff_relocation *Rel);
 
   Resolver *Res;
   std::unique_ptr<llvm::FileOutputBuffer> Buffer;
