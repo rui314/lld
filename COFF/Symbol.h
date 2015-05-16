@@ -107,6 +107,8 @@ public:
   static ErrorOr<std::unique_ptr<ObjectFile>>
     create(StringRef Path, MemoryBufferRef MB);
 
+  std::error_code initSections();
+
   std::string Name;
   std::vector<SymbolRef *> Symbols;
   std::vector<InputSection> Sections;

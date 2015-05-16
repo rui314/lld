@@ -21,17 +21,7 @@ namespace coff {
 std::error_code Resolver::addFile(std::unique_ptr<ObjectFile> File) {
   ObjectFile *FileP = File.get();
   Files.push_back(std::move(File));
-
-  // Initialize File->Sections.
   COFFObjectFile *Obj = FileP->COFFFile.get();
-  uint32_t NumSections = Obj->getNumberOfSections();
-  FileP->Sections.reserve(NumSections + 1);
-  for (uint32_t I = 1; I < NumSections + 1; ++I) {
-    const coff_section *Sec;
-    if (auto EC = Obj->getSection(I, Sec))
-      return EC;
-    FileP->Sections.emplace_back(FileP, Sec);
-  }
 
   // Resolve symbols
   uint32_t NumSymbols = Obj->getNumberOfSymbols();

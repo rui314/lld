@@ -84,10 +84,10 @@ ErrorOr<std::unique_ptr<ObjectFile>> ObjectFile::create(StringRef Path) {
     return EC;
   std::unique_ptr<MemoryBuffer> MB = std::move(MBOrErr.get());
 
-  auto ObjectFileOrErr = create(Path, MB->getMemBufferRef());
-  if (auto EC = ObjectFileOrErr.getError())
+  auto FileOrErr = create(Path, MB->getMemBufferRef());
+  if (auto EC = FileOrErr.getError())
     return EC;
-  std::unique_ptr<ObjectFile> File = std::move(ObjectFileOrErr.get());
+  std::unique_ptr<ObjectFile> File = std::move(FileOrErr.get());
 
   // Transfer the ownership
   File->MB = std::move(MB);
@@ -103,8 +103,24 @@ ObjectFile::create(StringRef Path, MemoryBufferRef MBRef) {
 
   if (!isa<COFFObjectFile>(Bin.get()))
     return lld::make_dynamic_error_code(Twine(Path) + " is not a COFF file.");
-  std::unique_ptr<COFFObjectFile> File(static_cast<COFFObjectFile *>(Bin.release()));
-  return std::unique_ptr<ObjectFile>(new ObjectFile(Path, std::move(File)));
+  std::unique_ptr<COFFObjectFile> Obj(static_cast<COFFObjectFile *>(Bin.release()));
+  auto File = std::unique_ptr<ObjectFile>(new ObjectFile(Path, std::move(Obj)));
+  if (auto EC = File->initSections())
+    return EC;
+  return std::move(File);
+}
+
+std::error_code ObjectFile::initSections() {
+  COFFObjectFile *Obj = COFFFile.get();
+  uint32_t NumSections = Obj->getNumberOfSections();
+  Sections.reserve(NumSections);
+  for (uint32_t I = 1; I < NumSections + 1; ++I) {
+    const coff_section *Sec;
+    if (auto EC = Obj->getSection(I, Sec))
+      return EC;
+    Sections.emplace_back(this, Sec);
+  }
+  return std::error_code();
 }
 
 }

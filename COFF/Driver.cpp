@@ -12,6 +12,7 @@
 #include "Writer.h"
 #include "lld/Core/Error.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
@@ -22,6 +23,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/Process.h"
 #include "llvm/Support/raw_ostream.h"
 #include <memory>
 #include <sstream>
@@ -73,6 +75,32 @@ getOutputPath(std::unique_ptr<llvm::opt::InputArgList> &Args) {
   return Val.str();
 }
 
+// Split the given string with the path separator.
+static std::vector<StringRef> splitPathList(StringRef str) {
+  std::vector<StringRef> ret;
+  while (!str.empty()) {
+    StringRef path;
+    std::tie(path, str) = str.split(';');
+    ret.push_back(path);
+  }
+  return ret;
+}
+
+static std::string findFile(StringRef Filename) {
+  if (llvm::sys::fs::exists(Filename))
+    return Filename;
+  llvm::Optional<std::string> Env = llvm::sys::Process::GetEnv("LIB");
+  if (!Env.hasValue())
+    return "";
+  for (StringRef Dir : splitPathList(*Env)) {
+    SmallString<128> Path = Dir;
+    llvm::sys::path::append(Path, Filename);
+    if (llvm::sys::fs::exists(Path.str()))
+      return Path.str();
+  }
+  return "";
+}
+
 namespace lld {
 namespace coff {
 
@@ -101,7 +129,7 @@ bool link(int Argc, const char *Argv[]) {
 
   Resolver Res;
   for (auto *Arg : Args->filtered(OPT_INPUT)) {
-    StringRef Path = Arg->getValue();
+    std::string Path = findFile(Arg->getValue());
     ErrorOr<std::unique_ptr<ObjectFile>> FileOrErr = ObjectFile::create(Path);
     if (auto EC = FileOrErr.getError()) {
       llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";
