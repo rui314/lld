@@ -59,14 +59,14 @@ public:
 
 class CanBeDefined : public Symbol {
 public:
-  CanBeDefined(ArchiveFile *F, Archive::Symbol *S)
+  CanBeDefined(ArchiveFile *F, const Archive::Symbol *S)
     : Symbol(CanBeDefinedKind), File(F), Sym(S) {}
   static bool classof(const Symbol *S) { return S->kind() == CanBeDefinedKind; }
 
   ErrorOr<std::unique_ptr<ObjectFile>> getMember();
 
   ArchiveFile *File;
-  Archive::Symbol *Sym;
+  const Archive::Symbol *Sym;
 };
 
 class Undefined : public Symbol {
@@ -90,7 +90,7 @@ public:
 
   std::string Name;
   std::unique_ptr<Archive> File;
-  ErrorOr<std::unique_ptr<ObjectFile>> getMember(Archive::Symbol *Sym);
+  ErrorOr<std::unique_ptr<ObjectFile>> getMember(const Archive::Symbol *Sym);
 
 private:
   ArchiveFile(StringRef N, std::unique_ptr<Archive> F,

@@ -65,6 +65,22 @@ std::error_code Resolver::addFile(std::unique_ptr<ObjectFile> File) {
   return std::error_code();
 }
 
+std::error_code Resolver::addFile(std::unique_ptr<ArchiveFile> File) {
+  ArchiveFile *FileP = File.get();
+  Archives.push_back(std::move(File));
+  Archive *Arc = FileP->File.get();
+  for (const Archive::Symbol &ArcSym : Arc->symbols()) {
+    StringRef Name = ArcSym.getName();
+    if (Symtab.count(Name) == 0)
+      Symtab[Name] = SymbolRef(Name, nullptr);
+    SymbolRef *Ref = &Symtab[Name];
+    Symbol *Sym = new (Alloc) CanBeDefined(FileP, &ArcSym);
+    if (auto EC = resolve(Ref, Sym))
+      return EC;
+  }
+  return std::error_code();
+}
+
 bool Resolver::reportRemainingUndefines() {
   for (auto &I : Symtab) {
     SymbolRef Ref = I.second;

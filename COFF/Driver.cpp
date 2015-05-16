@@ -130,6 +130,18 @@ bool link(int Argc, const char *Argv[]) {
   Resolver Res;
   for (auto *Arg : Args->filtered(OPT_INPUT)) {
     std::string Path = findFile(Arg->getValue());
+    if (StringRef(Path).endswith_lower(".lib")) {
+      ErrorOr<std::unique_ptr<ArchiveFile>> FileOrErr = ArchiveFile::create(Path);
+      if (auto EC = FileOrErr.getError()) {
+	llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";
+	continue;
+      }
+      if (auto EC = Res.addFile(std::move(FileOrErr.get()))) {
+	llvm::errs() << "addFile failed: " << Path << ": " << EC.message() << "\n";
+	return false;
+      }
+      continue;
+    }
     ErrorOr<std::unique_ptr<ObjectFile>> FileOrErr = ObjectFile::create(Path);
     if (auto EC = FileOrErr.getError()) {
       llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";

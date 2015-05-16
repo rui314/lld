@@ -53,7 +53,7 @@ ErrorOr<std::unique_ptr<ArchiveFile>> ArchiveFile::create(StringRef Path) {
 }
 
 ErrorOr<std::unique_ptr<ObjectFile>>
-ArchiveFile::getMember(Archive::Symbol *Sym) {
+ArchiveFile::getMember(const Archive::Symbol *Sym) {
   auto ItOrErr = Sym->getMember();
   if (auto EC = ItOrErr.getError())
     return EC;

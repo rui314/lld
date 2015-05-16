@@ -18,7 +18,7 @@ namespace coff {
 class Resolver {
 public:
   std::error_code addFile(std::unique_ptr<ObjectFile> File);
-  std::error_code addFile(ArchiveFile *Archive);
+  std::error_code addFile(std::unique_ptr<ArchiveFile> Archive);
   bool reportRemainingUndefines();
   std::vector<std::unique_ptr<ObjectFile>> &getFiles() {
     return Files;
