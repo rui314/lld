@@ -24,6 +24,8 @@ public:
     return Files;
   }
 
+  uint64_t getRVA(StringRef Symbol);
+
 private:
   std::error_code resolve(SymbolRef *Ref, Symbol *Sym);
   std::error_code addMemberFile(CanBeDefined *Sym);

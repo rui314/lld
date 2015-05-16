@@ -75,8 +75,10 @@ public:
 };
 
 struct SymbolRef {
+  SymbolRef(StringRef N, Symbol *P) : Name(N), Ptr(P) {}
+  SymbolRef() : Name(""), Ptr(nullptr) {}
   StringRef Name;
-  Symbol *Ptr = nullptr;
+  Symbol *Ptr;
 };
 
 class ArchiveFile {

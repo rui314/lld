@@ -199,10 +199,10 @@ void Writer::writeSections() {
 }
 
 void Writer::backfillHeaders() {
+  PE->AddressOfEntryPoint = Res->getRVA("main");
   for (OutputSection &Out : OutputSections) {
     if (Out.Name == ".text") {
       PE->SizeOfCode = Out.Header.SizeOfRawData;
-      PE->AddressOfEntryPoint = Out.Header.VirtualAddress;
       PE->BaseOfCode = Out.Header.VirtualAddress;
       return;
     }

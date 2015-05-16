@@ -19,7 +19,7 @@ namespace coff {
 
 Defined::Defined(ObjectFile *F, COFFSymbolRef SymRef)
   : Symbol(DefinedKind), File(F), Sym(SymRef),
-    Section(&File->Sections[Sym.getSectionNumber()]) {}
+    Section(&File->Sections[Sym.getSectionNumber() - 1]) {}
 
 bool Defined::IsCOMDAT() const {
   return Section && Section->IsCOMDAT();

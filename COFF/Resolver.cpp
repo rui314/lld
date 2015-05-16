@@ -22,7 +22,7 @@ std::error_code Resolver::addFile(std::unique_ptr<ObjectFile> File) {
   ObjectFile *FileP = File.get();
   Files.push_back(std::move(File));
 
-  // Initialize File-S>ections.
+  // Initialize File->Sections.
   COFFObjectFile *Obj = FileP->COFFFile.get();
   uint32_t NumSections = Obj->getNumberOfSections();
   FileP->Sections.reserve(NumSections + 1);
@@ -56,15 +56,15 @@ std::error_code Resolver::addFile(std::unique_ptr<ObjectFile> File) {
       // the symbol vector because any symbols can be referred by
       // relocations.
       llvm::dbgs() << "Add " << Name << "\n";
-      SymbolRef Ref;
-      Ref.Name = Name;
+      SymbolRef Ref(Name, nullptr);
       FileP->Symbols[I] = &Ref;
     } else {
       // We now have an externally-visible symbol. Create a symbol
       // wrapper object and add it to the symbol table if there's no
       // existing one. If there's an existing one, resolve the conflict.
+      if (Symtab.count(Name) == 0)
+	Symtab[Name] = SymbolRef(Name, nullptr);
       SymbolRef *Ref = &Symtab[Name];
-      Ref->Name = Name;
       Symbol *Sym = createSymbol(FileP, Sref);
       if (auto EC = resolve(Ref, Sym))
 	return EC;
@@ -177,6 +177,15 @@ Symbol *Resolver::createSymbol(ObjectFile *File, COFFSymbolRef Sym) {
   if (Sym.isUndefined())
     return new (Alloc) Undefined(File);
   return new (Alloc) Defined(File, Sym);
+}
+
+uint64_t Resolver::getRVA(StringRef Symbol) {
+  auto It = Symtab.find(Symbol);
+  if (It == Symtab.end())
+    return 0;
+  SymbolRef Ref = It->second;
+  auto *Def = cast<Defined>(Ref.Ptr);
+  return Def->Section->RVA + Def->Sym.getValue();
 }
 
 } // namespace coff
