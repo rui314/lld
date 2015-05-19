@@ -14,6 +14,7 @@
 
 using namespace llvm::object;
 using namespace llvm::support::endian;
+using llvm::RoundUpToAlignment;
 
 namespace lld {
 namespace coff {
@@ -176,6 +177,61 @@ void InputSection::applyRelocation(uint8_t *Buffer, const coff_relocation *Rel) 
   } else {
     llvm::report_fatal_error("Unsupported relocation type");
   }
+}
+
+static uint32_t
+mergeCharacteristics(const coff_section &A, const coff_section &B) {
+  uint32_t Mask = (llvm::COFF::IMAGE_SCN_MEM_SHARED
+		   | llvm::COFF::IMAGE_SCN_MEM_EXECUTE
+		   | llvm::COFF::IMAGE_SCN_MEM_READ
+		   | llvm::COFF::IMAGE_SCN_CNT_CODE);
+  return (A.Characteristics | B.Characteristics) & Mask;
+}
+
+static void sortByName(std::vector<InputSection *> *Sections) {
+  auto comp = [](const InputSection *A, const InputSection *B) {
+    return A->Name < B->Name;
+  };
+  std::stable_sort(Sections->begin(), Sections->end(), comp);
+}
+
+OutputSection::OutputSection(StringRef N, uint32_t SI,
+			     std::vector<InputSection *> *InputSections)
+    : Name(N), SectionIndex(SI) {
+  memset(&Header, 0, sizeof(Header));
+  strncpy(Header.Name, Name.data(), std::min(Name.size(), size_t(8)));
+
+  if (InputSections) {
+    sortByName(InputSections);
+    for (InputSection *Sec : *InputSections) {
+      addChunk(&Sec->Chunk);
+      Header.Characteristics = mergeCharacteristics(Header, *Sec->Header);
+    }
+  }
+}
+
+void OutputSection::setRVA(uint64_t RVA) {
+  Header.VirtualAddress = RVA;
+  for (Chunk *C : Chunks)
+    C->RVA += RVA;
+}
+
+void OutputSection::setFileOffset(uint64_t Off) {
+  Header.PointerToRawData = Off;
+  for (Chunk *C : Chunks)
+    C->FileOff += Off;
+}
+
+void OutputSection::addChunk(Chunk *C) {
+  const int FileAlignment = 512;
+  Chunks.push_back(C);
+  uint64_t Off = Header.VirtualSize;
+  Off = RoundUpToAlignment(Off, C->Align);
+  C->RVA = Off;
+  C->FileOff = Off;
+  Off += C->Data.size();
+  Header.VirtualSize = Off;
+  Header.SizeOfRawData = RoundUpToAlignment(Off, FileAlignment);
 }
 
 }

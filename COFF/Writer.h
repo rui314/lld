@@ -37,6 +37,7 @@ public:
 
 private:
   void groupSections();
+  void createImportTables();
   void assignAddresses();
   void removeEmptySections();
   void openFile(StringRef OutputPath);

@@ -146,7 +146,7 @@ public:
   ArrayRef<uint8_t> Data;
   uint64_t RVA = 0;
   uint64_t FileOff = 0;
-  uint64_t Align = 0;
+  uint64_t Align = 1;
   virtual void applyRelocations(uint8_t *Buffer) = 0;
 };
 
@@ -154,7 +154,23 @@ class SectionChunk : public Chunk {
 public:
   SectionChunk(InputSection *S) : Section(S) {}
   void applyRelocations(uint8_t *Buffer) override;
+
+private:
   InputSection *Section;
+};
+
+class StringChunk : public Chunk {
+public:
+  StringChunk(StringRef S) : Array(S.size() + 1) {
+    memcpy(Array.data(), S.data(), S.size());
+    Array[S.size()] = 0;
+    Data = Array;
+  }
+
+  void applyRelocations(uint8_t *Buffer) override {}
+
+private:
+  std::vector<uint8_t> Array;
 };
 
 class InputSection {
@@ -186,14 +202,13 @@ public:
 		std::vector<InputSection *> *InputSections);
   void setRVA(uint64_t);
   void setFileOffset(uint64_t);
+  void addChunk(Chunk *C);
 
   StringRef Name;
   uint32_t SectionIndex;
   llvm::object::coff_section Header;
   std::vector<Chunk *> Chunks;
 };
-
-
 
 typedef std::map<llvm::StringRef, SymbolRef> SymbolTable;
 
