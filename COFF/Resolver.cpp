@@ -58,11 +58,10 @@ std::error_code Resolver::addFile(std::unique_ptr<ObjectFile> File) {
       // existing one. If there's an existing one, resolve the conflict.
       if (Symtab.count(Name) == 0)
 	Symtab[Name] = SymbolRef(Name, nullptr);
-      SymbolRef *Ref = &Symtab[Name];
       Symbol *Sym = createSymbol(FileP, Sref);
-      if (auto EC = resolve(Ref, Sym))
+      if (auto EC = resolve(Name, Sym))
 	return EC;
-      FileP->Symbols[I] = Ref;
+      FileP->Symbols[I] = &Symtab[Name];
     }
     I += Sref.getNumberOfAuxSymbols();
   }
@@ -77,9 +76,8 @@ std::error_code Resolver::addFile(std::unique_ptr<ArchiveFile> File) {
     StringRef Name = ArcSym.getName();
     if (Symtab.count(Name) == 0)
       Symtab[Name] = SymbolRef(Name, nullptr);
-    SymbolRef *Ref = &Symtab[Name];
     Symbol *Sym = new (Alloc) CanBeDefined(FileP, &ArcSym);
-    if (auto EC = resolve(Ref, Sym))
+    if (auto EC = resolve(Name, Sym))
       return EC;
   }
   return std::error_code();
@@ -125,10 +123,11 @@ bool Resolver::reportRemainingUndefines() {
 // [Defined Defined]
 // Resolve them according to COMDAT values if both are COMDAT symbols.
 // It's an error if they are not COMDAT.
-std::error_code
-Resolver::resolve(SymbolRef *Ref, Symbol *Sym) {
-  if (Ref->Name == "__imp_lstrcat")
-    llvm::dbgs() << "Resolving " << Ref->Name << "\n";
+std::error_code Resolver::resolve(StringRef Name, Symbol *Sym) {
+  if (Symtab.count(Name) == 0)
+    Symtab[Name] = SymbolRef(Name, nullptr);
+  SymbolRef *Ref = &Symtab[Name];
+
   // If nothing exists yet, just add a new one.
   if (Ref->Ptr == nullptr) {
     Ref->Ptr = Sym;
@@ -179,12 +178,19 @@ std::error_code Resolver::addMemberFile(CanBeDefined *Sym) {
     return std::error_code();
 
   file_magic Magic = identify_magic(StringRef(MBRef.getBuffer()));
-  StringRef Filename = MBRef.getBufferIdentifier();
-  if (Magic != file_magic::coff_object) {
-    return make_dynamic_error_code(
-      Twine("unknown file in a library: ") + Filename);
+  if (Magic == file_magic::coff_import_library) {
+    auto SymOrErr = readImplib(MBRef, &Alloc);
+    if (auto EC = SymOrErr.getError())
+      return EC;
+    DefinedImplib *Imp = SymOrErr.get();
+    ImpSyms.push_back(Imp);
+    return resolve(Imp->Name, Imp);
   }
 
+  if (Magic != file_magic::coff_object)
+    return make_dynamic_error_code("unknown file type");
+
+  StringRef Filename = MBRef.getBufferIdentifier();
   auto FileOrErr = ObjectFile::create(Filename, MBRef);
   if (auto EC = FileOrErr.getError())
     return EC;

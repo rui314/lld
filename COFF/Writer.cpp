@@ -68,35 +68,67 @@ void Writer::groupSections() {
   }
 }
 
+std::map<StringRef, std::vector<DefinedImplib *>>
+groupImports(std::vector<DefinedImplib *> Impsyms) {
+  std::map<StringRef, std::vector<DefinedImplib *>> Res;
+  for (DefinedImplib *S : Impsyms)
+    Res[S->DLLName].push_back(S);
+
+  // Sort by symbol name
+  auto comp = [](const DefinedImplib *A, const DefinedImplib *B) {
+    return A->Name < B->Name;
+  };
+  for (auto &P : Res) {
+    std::vector<DefinedImplib *> &V = P.second;
+    std::stable_sort(V.begin(), V.end(), comp);
+  }
+  return Res;
+}
+
 void Writer::createImportTables() {
+  if (Res->ImpSyms.empty())
+    return;
+  
   std::unique_ptr<OutputSection> Idata(
     new OutputSection(".idata", OutputSections.size()));
   Idata->Header.Characteristics = (llvm::COFF::IMAGE_SCN_CNT_INITIALIZED_DATA
 				   | llvm::COFF::IMAGE_SCN_MEM_READ);
 
-  std::vector<StringRef> Symbols;
-  Symbols.push_back("_foo");
-  Symbols.push_back("_bar");
-  Symbols.push_back("_xxx");
-  auto *Tab = new ImportTable("kernel32.dll", Symbols);
+  std::vector<ImportTable *> Tabs;
+  for (auto &P : groupImports(Res->ImpSyms)) {
+    StringRef DLLName = P.first;
+    std::vector<DefinedImplib *> &Imports = P.second;
+    Tabs.push_back(new ImportTable(DLLName, Imports));
+  }
 
   OutputSection *Data = findSection(".data");
-  Data->addChunk(&Tab->DirTab.Name);
+  for (ImportTable *T : Tabs)
+    Data->addChunk(&T->DirTab.Name);
 
-  Idata->addChunk(&Tab->DirTab);
+  // Add the directory tables.
+  for (ImportTable *T : Tabs)
+    Idata->addChunk(&T->DirTab);
   Idata->addChunk(new NullChunk(sizeof(llvm::COFF::ImportDirectoryTableEntry)));
 
-  for (LookupChunk &C : Tab->LookupTables)
-    Idata->addChunk(&C);
-  Idata->addChunk(new NullChunk(8));
+  // Add the import lookup tables.
+  for (ImportTable *T : Tabs) {
+    for (LookupChunk &C : T->LookupTables)
+      Idata->addChunk(&C);
+    Idata->addChunk(new NullChunk(8));
+  }
 
-  for (LookupChunk &C : Tab->AddressTables)
-    Idata->addChunk(&C);
-  Idata->addChunk(new NullChunk(8));
+  // Add the import address tables. Their contents are the same as the
+  // lookup tables.
+  for (ImportTable *T : Tabs) {
+    for (LookupChunk &C : T->AddressTables)
+      Idata->addChunk(&C);
+    Idata->addChunk(new NullChunk(8));
+  }
 
-  for (HintNameChunk &C : Tab->HintNameTables)
-    Idata->addChunk(&C);
-
+  // Add the hint name table.
+  for (ImportTable *T : Tabs)
+    for (HintNameChunk &C : T->HintNameTables)
+      Idata->addChunk(&C);
   OutputSections.push_back(std::move(Idata));
 }
 

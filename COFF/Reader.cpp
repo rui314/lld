@@ -11,9 +11,14 @@
 #include "lld/Core/Error.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Object/COFF.h"
+#include "llvm/Support/COFF.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/Endian.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace llvm::object;
 using namespace llvm::support::endian;
+using llvm::COFF::ImportHeader;
 using llvm::RoundUpToAlignment;
 
 namespace lld {
@@ -33,6 +38,14 @@ uint64_t DefinedRegular::getRVA() {
 
 uint64_t DefinedRegular::getFileOff() {
   return Section->Chunk.FileOff + Sym.getValue();
+}
+
+uint64_t DefinedImplib::getRVA() {
+  return AddressTable->RVA;
+}
+
+uint64_t DefinedImplib::getFileOff() {
+  return AddressTable->FileOff;
 }
 
 ErrorOr<MemoryBufferRef> CanBeDefined::getMember() {
@@ -149,7 +162,7 @@ void InputSection::applyRelocation(uint8_t *Buffer, const coff_relocation *Rel) 
   const uint64_t ImageBase = 0x140000000;
 
   uint8_t *Off = Buffer + Chunk.FileOff + Rel->VirtualAddress;
-  auto *Sym = cast<DefinedRegular>(File->Symbols[Rel->SymbolTableIndex]->Ptr);
+  auto *Sym = cast<Defined>(File->Symbols[Rel->SymbolTableIndex]->Ptr);
   uint64_t S = Sym->getRVA();
   uint64_t P = Chunk.RVA + Rel->VirtualAddress;
   if (Rel->Type == IMAGE_REL_AMD64_ADDR32) {
@@ -207,6 +220,23 @@ void OutputSection::addChunk(Chunk *C) {
   Off += C->Data.size();
   Header.VirtualSize = Off;
   Header.SizeOfRawData = RoundUpToAlignment(Off, FileAlignment);
+}
+
+ErrorOr<DefinedImplib *>
+readImplib(MemoryBufferRef MBRef, llvm::BumpPtrAllocator *Alloc) {
+  const char *Buf = MBRef.getBufferStart();
+  const char *End = MBRef.getBufferEnd();
+
+  // The size of the string that follows the header.
+  uint32_t DataSize = read32le(Buf + offsetof(ImportHeader, SizeOfData));
+
+  // Check if the total size is valid.
+  if (size_t(End - Buf) != sizeof(ImportHeader) + DataSize)
+    return make_dynamic_error_code("broken import library");
+
+  std::string Name = (Twine("__imp_") + StringRef(Buf + sizeof(ImportHeader))).str();
+  StringRef DLLName(Buf + sizeof(ImportHeader) + Name.size() + 1);
+  return new (*Alloc) DefinedImplib(DLLName, *new std::string(Name));
 }
 
 }

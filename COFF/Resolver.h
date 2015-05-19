@@ -26,8 +26,10 @@ public:
 
   uint64_t getRVA(StringRef Symbol);
 
+  std::vector<DefinedImplib *> ImpSyms;
+
 private:
-  std::error_code resolve(SymbolRef *Ref, Symbol *Sym);
+  std::error_code resolve(StringRef Name, Symbol *Sym);
   std::error_code addMemberFile(CanBeDefined *Sym);
   Symbol *createSymbol(ObjectFile *Obj, COFFSymbolRef Sym);
 

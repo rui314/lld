@@ -29,9 +29,10 @@ namespace lld {
 namespace coff {
 
 class ArchiveFile;
+class Chunk;
 class InputSection;
-class OutputSection;
 class ObjectFile;
+class OutputSection;
 
 class Symbol {
 public:
@@ -58,6 +59,8 @@ public:
     Kind K = S->kind();
     return K == DefinedRegularKind || K == DefinedImplibKind;
   }
+  virtual uint64_t getRVA() = 0;
+  virtual uint64_t getFileOff() = 0;
   virtual bool isCOMDAT() const { return false; }
 };
 
@@ -68,13 +71,29 @@ public:
     return S->kind() == DefinedRegularKind;
   }
 
-  uint64_t getRVA();
-  uint64_t getFileOff();
+  uint64_t getRVA() override;
+  uint64_t getFileOff() override;
   bool isCOMDAT() const override;
 
   ObjectFile *File;
   COFFSymbolRef Sym;
   InputSection *Section;
+};
+
+class DefinedImplib : public Defined {
+public:
+  DefinedImplib(StringRef D, StringRef N)
+    : Defined(DefinedImplibKind), DLLName(D), Name(N) {}
+  static bool classof(const Symbol *S) {
+    return S->kind() == DefinedImplibKind;
+  }
+
+  uint64_t getRVA() override;
+  uint64_t getFileOff() override;
+
+  StringRef DLLName;
+  StringRef Name;
+  Chunk *AddressTable = nullptr;
 };
 
 class CanBeDefined : public Symbol {
@@ -210,6 +229,9 @@ public:
 };
 
 typedef std::map<llvm::StringRef, SymbolRef> SymbolTable;
+
+ErrorOr<DefinedImplib *>
+readImplib(MemoryBufferRef MBRef, llvm::BumpPtrAllocator *Alloc);
 
 } // namespace coff
 } // namespace lld

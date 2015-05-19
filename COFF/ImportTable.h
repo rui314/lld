@@ -89,15 +89,19 @@ private:
 
 class ImportTable {
 public:
-  ImportTable(StringRef DLLName, std::vector<StringRef> &Symbols)
-    : DirTab(DLLName) {
-    for (StringRef S : Symbols)
-      HintNameTables.emplace_back(S);
+  ImportTable(StringRef DLLName, std::vector<DefinedImplib *> &Symbols)
+      : DirTab(DLLName) {
+    for (DefinedImplib *S : Symbols)
+      HintNameTables.emplace_back(S->Name);
     
     for (HintNameChunk &H : HintNameTables) {
       LookupTables.emplace_back(&H);
       AddressTables.emplace_back(&H);
     }
+
+    for (int I = 0, E = Symbols.size(); I < E; ++I)
+      Symbols[I]->AddressTable = &AddressTables[I];
+
     DirTab.LookupTab = &LookupTables[0];
     DirTab.AddressTab = &AddressTables[0];
   }
