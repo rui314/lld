@@ -198,8 +198,7 @@ private:
 
 class OutputSection {
 public:
-  OutputSection(StringRef N, uint32_t SI,
-		std::vector<InputSection *> *InputSections);
+  OutputSection(StringRef N, uint32_t SI);
   void setRVA(uint64_t);
   void setFileOffset(uint64_t);
   void addChunk(Chunk *C);

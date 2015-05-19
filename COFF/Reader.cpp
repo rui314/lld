@@ -179,35 +179,10 @@ void InputSection::applyRelocation(uint8_t *Buffer, const coff_relocation *Rel) 
   }
 }
 
-static uint32_t
-mergeCharacteristics(const coff_section &A, const coff_section &B) {
-  uint32_t Mask = (llvm::COFF::IMAGE_SCN_MEM_SHARED
-		   | llvm::COFF::IMAGE_SCN_MEM_EXECUTE
-		   | llvm::COFF::IMAGE_SCN_MEM_READ
-		   | llvm::COFF::IMAGE_SCN_CNT_CODE);
-  return (A.Characteristics | B.Characteristics) & Mask;
-}
-
-static void sortByName(std::vector<InputSection *> *Sections) {
-  auto comp = [](const InputSection *A, const InputSection *B) {
-    return A->Name < B->Name;
-  };
-  std::stable_sort(Sections->begin(), Sections->end(), comp);
-}
-
-OutputSection::OutputSection(StringRef N, uint32_t SI,
-			     std::vector<InputSection *> *InputSections)
+OutputSection::OutputSection(StringRef N, uint32_t SI)
     : Name(N), SectionIndex(SI) {
   memset(&Header, 0, sizeof(Header));
   strncpy(Header.Name, Name.data(), std::min(Name.size(), size_t(8)));
-
-  if (InputSections) {
-    sortByName(InputSections);
-    for (InputSection *Sec : *InputSections) {
-      addChunk(&Sec->Chunk);
-      Header.Characteristics = mergeCharacteristics(Header, *Sec->Header);
-    }
-  }
 }
 
 void OutputSection::setRVA(uint64_t RVA) {

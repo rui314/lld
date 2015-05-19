@@ -30,6 +30,22 @@ static StringRef stripDollar(StringRef Name) {
   return Name.substr(0, Name.find('$'));
 }
 
+static uint32_t
+mergeCharacteristics(const coff_section &A, const coff_section &B) {
+  uint32_t Mask = (llvm::COFF::IMAGE_SCN_MEM_SHARED
+		   | llvm::COFF::IMAGE_SCN_MEM_EXECUTE
+		   | llvm::COFF::IMAGE_SCN_MEM_READ
+		   | llvm::COFF::IMAGE_SCN_CNT_CODE);
+  return (A.Characteristics | B.Characteristics) & Mask;
+}
+
+static void sortByName(std::vector<InputSection *> *Sections) {
+  auto comp = [](const InputSection *A, const InputSection *B) {
+    return A->Name < B->Name;
+  };
+  std::stable_sort(Sections->begin(), Sections->end(), comp);
+}
+
 void Writer::groupSections() {
   std::map<StringRef, std::vector<InputSection *>> Map;
   for (std::unique_ptr<ObjectFile> &File : Res->getFiles())
@@ -38,18 +54,25 @@ void Writer::groupSections() {
 
   for (auto &P : Map) {
     StringRef SectionName = P.first;
-    std::vector<InputSection *> &Sections = P.second;
+    std::vector<InputSection *> &InputSections = P.second;
+    sortByName(&InputSections);
     std::unique_ptr<OutputSection> OSec(
-      new OutputSection(SectionName, OutputSections.size(), &Sections));
-    for (InputSection *ISec : Sections)
+      new OutputSection(SectionName, OutputSections.size()));
+    for (InputSection *ISec : InputSections) {
       ISec->Out = OSec.get();
+      OSec->addChunk(&ISec->Chunk);
+      OSec->Header.Characteristics = mergeCharacteristics(
+	OSec->Header, *ISec->Header);
+    }
     OutputSections.push_back(std::move(OSec));
   }
 }
 
 void Writer::createImportTables() {
   std::unique_ptr<OutputSection> Idata(
-    new OutputSection(".idata", OutputSections.size(), nullptr));
+    new OutputSection(".idata", OutputSections.size()));
+  Idata->Header.Characteristics = (llvm::COFF::IMAGE_SCN_CNT_INITIALIZED_DATA
+				   | llvm::COFF::IMAGE_SCN_MEM_READ);
 
   std::vector<StringRef> Symbols;
   Symbols.push_back("_foo");
