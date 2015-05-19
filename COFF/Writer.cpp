@@ -233,7 +233,8 @@ void Writer::writeSections() {
     if (OSec->Name == ".text")
       memset(P + OSec->Header.PointerToRawData, 0xCC, OSec->Header.SizeOfRawData);
     for (Chunk *C : OSec->Chunks)
-      memcpy(P + C->FileOff, C->Data.data(), C->Data.size());
+      if (!C->isBSS())
+	memcpy(P + C->FileOff, C->getData(), C->getSize());
   }
 }
 
@@ -247,7 +248,7 @@ void Writer::backfillHeaders() {
     DataDirectory[COFF::IMPORT_TABLE].RelativeVirtualAddress = Idata->Header.VirtualAddress;
     DataDirectory[COFF::IMPORT_TABLE].Size = Idata->Header.SizeOfRawData;
     DataDirectory[COFF::IAT].RelativeVirtualAddress = IAT->RVA;
-    DataDirectory[COFF::IAT].Size = IAT->Data.size();
+    DataDirectory[COFF::IAT].Size = IAT->getSize();
   }
 }
 

@@ -164,17 +164,23 @@ private:
 
 class Chunk {
 public:
+  virtual const uint8_t *getData() const { return Data.data(); }
+  virtual size_t getSize() const { return Data.size(); }
+  virtual bool isBSS() const { return false; }
+  virtual void applyRelocations(uint8_t *Buffer) = 0;
+
   ArrayRef<uint8_t> Data;
   uint64_t RVA = 0;
   uint64_t FileOff = 0;
   uint64_t Align = 1;
-  virtual void applyRelocations(uint8_t *Buffer) = 0;
 };
 
 class SectionChunk : public Chunk {
 public:
   SectionChunk(InputSection *S) : Section(S) {}
   void applyRelocations(uint8_t *Buffer) override;
+  size_t getSize() const override;
+  bool isBSS() const override;
 
 private:
   InputSection *Section;
@@ -199,7 +205,8 @@ public:
   InputSection(ObjectFile *F, const coff_section *H)
     : File(F), Header(H), Chunk(this) {
     F->COFFFile->getSectionName(H, Name);
-    F->COFFFile->getSectionContents(H, Chunk.Data);
+    if (!Chunk.isBSS())
+      F->COFFFile->getSectionContents(H, Chunk.Data);
     Chunk.Align = getAlign();
   }
 

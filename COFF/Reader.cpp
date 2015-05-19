@@ -134,6 +134,15 @@ void SectionChunk::applyRelocations(uint8_t *Buffer) {
   Section->applyRelocations(Buffer);
 }
 
+bool SectionChunk::isBSS() const {
+  return Section->Header->Characteristics
+    & llvm::COFF::IMAGE_SCN_CNT_UNINITIALIZED_DATA;
+}
+
+size_t SectionChunk::getSize() const {
+  return Section->Header->SizeOfRawData;
+}
+
 bool InputSection::isCOMDAT() const {
   return Header->Characteristics & llvm::COFF::IMAGE_SCN_LNK_COMDAT;
 }
@@ -217,9 +226,10 @@ void OutputSection::addChunk(Chunk *C) {
   Off = RoundUpToAlignment(Off, C->Align);
   C->RVA = Off;
   C->FileOff = Off;
-  Off += C->Data.size();
+  Off += C->getSize();
   Header.VirtualSize = Off;
-  Header.SizeOfRawData = RoundUpToAlignment(Off, FileAlignment);
+  if (!C->isBSS())
+    Header.SizeOfRawData = RoundUpToAlignment(Off, FileAlignment);
 }
 
 ErrorOr<DefinedImplib *>
