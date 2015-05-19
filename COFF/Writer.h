@@ -54,6 +54,7 @@ private:
   llvm::object::data_directory *DataDirectory;
   llvm::object::coff_section *SectionTable;
   std::vector<std::unique_ptr<OutputSection>> OutputSections;
+  Chunk *IAT = nullptr;
 
   uint64_t EndOfSectionTable;
   uint64_t SectionTotalSizeDisk;

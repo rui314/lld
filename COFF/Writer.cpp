@@ -125,6 +125,8 @@ void Writer::createImportTables() {
     Idata->addChunk(new NullChunk(8));
   }
 
+  IAT = &Tabs[0]->AddressTables[0];
+
   // Add the hint name table.
   for (ImportTable *T : Tabs)
     for (HintNameChunk &C : T->HintNameTables)
@@ -242,9 +244,10 @@ void Writer::backfillHeaders() {
     PE->SizeOfCode = Text->Header.SizeOfRawData;
   }
   if (OutputSection *Idata = findSection(".idata")) {
-    data_directory &D = DataDirectory[COFF::IMPORT_TABLE];
-    D.RelativeVirtualAddress = Idata->Header.VirtualAddress;
-    D.Size = Idata->Header.SizeOfRawData;
+    DataDirectory[COFF::IMPORT_TABLE].RelativeVirtualAddress = Idata->Header.VirtualAddress;
+    DataDirectory[COFF::IMPORT_TABLE].Size = Idata->Header.SizeOfRawData;
+    DataDirectory[COFF::IAT].RelativeVirtualAddress = IAT->RVA;
+    DataDirectory[COFF::IAT].Size = IAT->Data.size();
   }
 }
 
