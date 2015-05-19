@@ -71,10 +71,8 @@ void Writer::createImportTables() {
     Idata->addChunk(&C);
   Idata->addChunk(new NullChunk(8));
 
-  for (HintNameChunk &C : Tab->HintNameTables) {
-//    llvm::dbgs() << "S=" << StringRef((char *)(&C.Data[2])) << "\n";
+  for (HintNameChunk &C : Tab->HintNameTables)
     Idata->addChunk(&C);
-  }
 
   OutputSections.push_back(std::move(Idata));
 }
