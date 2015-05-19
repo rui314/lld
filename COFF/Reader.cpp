@@ -24,8 +24,8 @@ using llvm::RoundUpToAlignment;
 namespace lld {
 namespace coff {
 
-DefinedRegular::DefinedRegular(ObjectFile *F, COFFSymbolRef SymRef)
-  : Defined(DefinedRegularKind), File(F), Sym(SymRef),
+DefinedRegular::DefinedRegular(ObjectFile *F, StringRef N, COFFSymbolRef SymRef)
+  : Defined(DefinedRegularKind), File(F), Name(N), Sym(SymRef),
     Section(&File->Sections[Sym.getSectionNumber() - 1]) {}
 
 bool DefinedRegular::isCOMDAT() const {
@@ -49,7 +49,7 @@ uint64_t DefinedImplib::getFileOff() {
 }
 
 ErrorOr<MemoryBufferRef> CanBeDefined::getMember() {
-  return File->getMember(Sym);
+  return File->getMember(&Sym);
 }
 
 ErrorOr<std::unique_ptr<ArchiveFile>> ArchiveFile::create(StringRef Path) {
@@ -65,6 +65,13 @@ ErrorOr<std::unique_ptr<ArchiveFile>> ArchiveFile::create(StringRef Path) {
 
   return std::unique_ptr<ArchiveFile>(
     new ArchiveFile(Path, std::move(File), std::move(MB)));
+}
+
+std::vector<Symbol *> ArchiveFile::getSymbols() {
+  std::vector<Symbol *> Ret;
+  for (const Archive::Symbol &Sym : File->symbols())
+    Ret.push_back(new CanBeDefined(this, Sym));
+  return Ret;
 }
 
 ErrorOr<MemoryBufferRef>
@@ -112,9 +119,46 @@ ObjectFile::create(StringRef Path, MemoryBufferRef MBRef) {
     return lld::make_dynamic_error_code(Twine(Path) + " is not a COFF file.");
   std::unique_ptr<COFFObjectFile> Obj(static_cast<COFFObjectFile *>(Bin.release()));
   auto File = std::unique_ptr<ObjectFile>(new ObjectFile(Path, std::move(Obj)));
+
   if (auto EC = File->initSections())
     return EC;
+  File->Symbols.resize(File->COFFFile->getNumberOfSymbols());
   return std::move(File);
+}
+
+std::vector<Symbol *> ObjectFile::getSymbols() {
+  std::vector<Symbol *> Ret;
+  for (uint32_t I = 0, E = COFFFile->getNumberOfSymbols(); I < E; ++I) {
+    // Get a COFFSymbolRef object.
+    auto SrefOrErr = COFFFile->getSymbol(I);
+    if (auto EC = SrefOrErr.getError()) {
+      llvm::errs() << "broken object file: " << Name << ": " << EC.message() << "\n";
+      break;
+    }
+    COFFSymbolRef Sref = SrefOrErr.get();
+
+    // Get a symbol name.
+    StringRef SymbolName;
+    if (auto EC = COFFFile->getSymbolName(Sref, SymbolName)) {
+      llvm::errs() << "broken object file: " << Name << ": " << EC.message() << "\n";
+      break;
+    }
+
+    Symbol *P = nullptr;
+    if (Sref.isUndefined()) {
+      P = new Undefined(this, SymbolName);
+    } else if (Sref.getSectionNumber() == -1) {
+      // absolute symbol
+    } else {
+      P = new DefinedRegular(this, SymbolName, Sref);
+    }
+    if (P) {
+      P->SymbolRefPP = &Symbols[I];
+      Ret.push_back(P);
+    }
+    I += Sref.getNumberOfAuxSymbols();
+  }
+  return Ret;
 }
 
 std::error_code ObjectFile::initSections() {
@@ -128,6 +172,18 @@ std::error_code ObjectFile::initSections() {
     Sections.emplace_back(this, Sec);
   }
   return std::error_code();
+}
+
+SectionChunk::SectionChunk(InputSection *S) : Section(S) {
+  if (!isBSS())
+    Section->File->COFFFile->getSectionContents(Section->Header, Data);
+  unsigned Shift = ((Section->Header->Characteristics & 0x00F00000) >> 20) - 1;
+  Align = uint64_t(1) << Shift;
+}
+
+const uint8_t *SectionChunk::getData() const {
+  assert(!isBSS());
+  return Data.data();
 }
 
 void SectionChunk::applyRelocations(uint8_t *Buffer) {
@@ -145,11 +201,6 @@ size_t SectionChunk::getSize() const {
 
 bool InputSection::isCOMDAT() const {
   return Header->Characteristics & llvm::COFF::IMAGE_SCN_LNK_COMDAT;
-}
-
-uint64_t InputSection::getAlign() const {
-  unsigned Shift = ((Header->Characteristics & 0x00F00000) >> 20) - 1;
-  return uint64_t(1) << Shift;
 }
 
 void InputSection::applyRelocations(uint8_t *Buffer) {
@@ -232,8 +283,7 @@ void OutputSection::addChunk(Chunk *C) {
     Header.SizeOfRawData = RoundUpToAlignment(Off, FileAlignment);
 }
 
-ErrorOr<DefinedImplib *>
-readImplib(MemoryBufferRef MBRef, llvm::BumpPtrAllocator *Alloc) {
+ErrorOr<DefinedImplib *> readImplib(MemoryBufferRef MBRef) {
   const char *Buf = MBRef.getBufferStart();
   const char *End = MBRef.getBufferEnd();
 
@@ -246,7 +296,7 @@ readImplib(MemoryBufferRef MBRef, llvm::BumpPtrAllocator *Alloc) {
 
   std::string Name = StringRef(Buf + sizeof(ImportHeader));
   StringRef DLLName(Buf + sizeof(ImportHeader) + Name.size() + 1);
-  return new (*Alloc) DefinedImplib(DLLName, *new std::string(Name));
+  return new DefinedImplib(DLLName, *new std::string(Name));
 }
 
 }

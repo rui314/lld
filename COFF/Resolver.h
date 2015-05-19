@@ -31,11 +31,9 @@ public:
 private:
   std::error_code resolve(StringRef Name, Symbol *Sym);
   std::error_code addMemberFile(CanBeDefined *Sym);
-  Symbol *createSymbol(ObjectFile *Obj, COFFSymbolRef Sym);
 
   std::vector<std::unique_ptr<ObjectFile>> Files;
   std::vector<std::unique_ptr<ArchiveFile>> Archives;
-  mutable llvm::BumpPtrAllocator Alloc;
   SymbolTable Symtab;
 };
 

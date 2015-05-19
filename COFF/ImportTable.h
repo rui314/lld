@@ -28,23 +28,28 @@ namespace coff {
 class HintNameChunk : public Chunk {
 public:
   HintNameChunk(StringRef Name)
-    : Array(new std::vector<uint8_t>(llvm::RoundUpToAlignment(Name.size() + 4, 2))) {
-    memcpy(&((*Array)[2]), Name.data(), Name.size());
-    Data = *Array;
+    : Data(new std::vector<uint8_t>(llvm::RoundUpToAlignment(Name.size() + 4, 2))) {
+    memcpy(&((*Data)[2]), Name.data(), Name.size());
   }
   
+  const uint8_t *getData() const override { return &(*Data)[0]; }
+  size_t getSize() const override { return Data->size(); }
   void applyRelocations(uint8_t *Buffer) override {}
 
 private:
-  std::vector<uint8_t> *Array;
+  std::vector<uint8_t> *Data;
 };
 
 class LookupChunk : public Chunk {
 public:
-  LookupChunk(HintNameChunk *H) : HintName(H) {
-    Data = ArrayRef<uint8_t>(reinterpret_cast<uint8_t *>(&Ent), sizeof(Ent));
-  }
+  LookupChunk(HintNameChunk *H) : HintName(H) {}
   
+  const uint8_t *getData() const override {
+    return reinterpret_cast<const uint8_t *>(&Ent);
+  }
+
+  size_t getSize() const override { return sizeof(Ent); }
+
   void applyRelocations(uint8_t *Buffer) override {
     write32le(Buffer + FileOff, HintName->RVA);
   }
@@ -57,9 +62,13 @@ private:
 
 class DirectoryChunk : public Chunk {
 public:
-  DirectoryChunk(StringRef DLLName) : Name(DLLName) {
-    Data = ArrayRef<uint8_t>(reinterpret_cast<uint8_t *>(&Ent), sizeof(Ent));
+  DirectoryChunk(StringRef N) : Name(N) {}
+
+  const uint8_t *getData() const override {
+    return reinterpret_cast<const uint8_t *>(&Ent);
   }
+
+  size_t getSize() const override { return sizeof(Ent); }
 
   void applyRelocations(uint8_t *Buffer) override {
     auto *E = reinterpret_cast<llvm::COFF::ImportDirectoryTableEntry *>(Buffer + FileOff);
@@ -78,13 +87,14 @@ private:
 
 class NullChunk : public Chunk {
 public:
-  NullChunk(size_t Size) : Array(Size) {
-    Data = Array;
-  }
+  NullChunk(size_t Size) : Data(Size) {}
+
+  const uint8_t *getData() const override { return Data.data(); }
+  size_t getSize() const override { return Data.size(); }
   void applyRelocations(uint8_t *Buffer) override {}
 
 private:
-  std::vector<uint8_t> Array;
+  std::vector<uint8_t> Data;
 };
 
 class ImportTable {

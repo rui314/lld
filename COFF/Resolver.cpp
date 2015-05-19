@@ -23,72 +23,36 @@ namespace lld {
 namespace coff {
 
 std::error_code Resolver::addFile(std::unique_ptr<ObjectFile> File) {
-  ObjectFile *FileP = File.get();
-  Files.push_back(std::move(File));
-  COFFObjectFile *Obj = FileP->COFFFile.get();
-
-  // Resolve symbols
-  uint32_t NumSymbols = Obj->getNumberOfSymbols();
-  FileP->Symbols.resize(NumSymbols);
-  for (uint32_t I = 0; I < NumSymbols; ++I) {
-    // Get a COFFSymbolRef object.
-    auto SrefOrErr = Obj->getSymbol(I);
-    if (auto EC = SrefOrErr.getError())
-      return EC;
-    COFFSymbolRef Sref = SrefOrErr.get();
-
-    // Get a symbol name.
-    StringRef Name;
-    if (auto EC = Obj->getSymbolName(Sref, Name))
-      return EC;
-    
-    // Only externally-visible symbols should be subjects of symbol
-    // resolution. If it's internal, don't add that to the symbol
-    // table.
-    if (!Sref.isExternal()) {
-      // We still want to add all symbols, including internal ones, to
-      // the symbol vector because any symbols can be referred by
-      // relocations.
-      llvm::dbgs() << "Add " << Name << "\n";
-      SymbolRef Ref(Name, nullptr);
-      FileP->Symbols[I] = &Ref;
-    } else {
-      // We now have an externally-visible symbol. Create a symbol
-      // wrapper object and add it to the symbol table if there's no
-      // existing one. If there's an existing one, resolve the conflict.
-      if (Symtab.count(Name) == 0)
-	Symtab[Name] = SymbolRef(Name, nullptr);
-      Symbol *Sym = createSymbol(FileP, Sref);
+  for (Symbol *Sym : File->getSymbols()) {
+    StringRef Name = Sym->getName();
+    if (Sym->isExternal()) {
+      // Only externally-visible symbols are subjects of symbol
+      // resolution.
       if (auto EC = resolve(Name, Sym))
 	return EC;
-      FileP->Symbols[I] = &Symtab[Name];
+      *Sym->SymbolRefPP = Symtab[Name];
+    } else {
+      *Sym->SymbolRefPP = new SymbolRef(Sym);
     }
-    I += Sref.getNumberOfAuxSymbols();
   }
+  Files.push_back(std::move(File));
   return std::error_code();
 }
 
 std::error_code Resolver::addFile(std::unique_ptr<ArchiveFile> File) {
-  ArchiveFile *FileP = File.get();
-  Archives.push_back(std::move(File));
-  Archive *Arc = FileP->File.get();
-  for (const Archive::Symbol &ArcSym : Arc->symbols()) {
-    StringRef Name = ArcSym.getName();
-    if (Symtab.count(Name) == 0)
-      Symtab[Name] = SymbolRef(Name, nullptr);
-    Symbol *Sym = new (Alloc) CanBeDefined(FileP, &ArcSym);
-    if (auto EC = resolve(Name, Sym))
+  for (Symbol *Sym : File->getSymbols())
+    if (auto EC = resolve(Sym->getName(), Sym))
       return EC;
-  }
+  Archives.push_back(std::move(File));
   return std::error_code();
 }
 
 bool Resolver::reportRemainingUndefines() {
   for (auto &I : Symtab) {
-    SymbolRef Ref = I.second;
-    if (!dyn_cast<Undefined>(Ref.Ptr))
+    SymbolRef *Ref = I.second;
+    if (!dyn_cast<Undefined>(Ref->Ptr))
       continue;
-    llvm::errs() << "undefined symbol: " << Ref.Name << "\n";
+    llvm::errs() << "undefined symbol: " << Ref->Ptr->getName() << "\n";
     return true;
   }
   return false;
@@ -125,8 +89,8 @@ bool Resolver::reportRemainingUndefines() {
 // It's an error if they are not COMDAT.
 std::error_code Resolver::resolve(StringRef Name, Symbol *Sym) {
   if (Symtab.count(Name) == 0)
-    Symtab[Name] = SymbolRef(Name, nullptr);
-  SymbolRef *Ref = &Symtab[Name];
+    Symtab[Name] = new SymbolRef();
+  SymbolRef *Ref = Symtab[Name];
 
   // If nothing exists yet, just add a new one.
   if (Ref->Ptr == nullptr) {
@@ -163,7 +127,7 @@ std::error_code Resolver::resolve(StringRef Name, Symbol *Sym) {
   Defined *New = cast<Defined>(Sym);
   if (Existing->isCOMDAT() && New->isCOMDAT())
       return std::error_code();
-  return make_dynamic_error_code(Twine("Duplicate symbol: ") + Ref->Name);
+  return make_dynamic_error_code(Twine("duplicate symbol: ") + Ref->Ptr->getName());
 }
 
 std::error_code Resolver::addMemberFile(CanBeDefined *Sym) {
@@ -179,7 +143,7 @@ std::error_code Resolver::addMemberFile(CanBeDefined *Sym) {
 
   file_magic Magic = identify_magic(StringRef(MBRef.getBuffer()));
   if (Magic == file_magic::coff_import_library) {
-    auto SymOrErr = readImplib(MBRef, &Alloc);
+    auto SymOrErr = readImplib(MBRef);
     if (auto EC = SymOrErr.getError())
       return EC;
     DefinedImplib *Imp = SymOrErr.get();
@@ -198,18 +162,12 @@ std::error_code Resolver::addMemberFile(CanBeDefined *Sym) {
   return addFile(std::move(Obj));
 }
 
-Symbol *Resolver::createSymbol(ObjectFile *File, COFFSymbolRef Sym) {
-  if (Sym.isUndefined())
-    return new (Alloc) Undefined(File);
-  return new (Alloc) DefinedRegular(File, Sym);
-}
-
 uint64_t Resolver::getRVA(StringRef Symbol) {
   auto It = Symtab.find(Symbol);
   if (It == Symtab.end())
     return 0;
-  SymbolRef Ref = It->second;
-  return cast<DefinedRegular>(Ref.Ptr)->getRVA();
+  SymbolRef *Ref = It->second;
+  return cast<DefinedRegular>(Ref->Ptr)->getRVA();
 }
 
 } // namespace coff
