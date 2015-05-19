@@ -92,7 +92,7 @@ public:
   ImportTable(StringRef DLLName, std::vector<DefinedImplib *> &Symbols)
       : DirTab(DLLName) {
     for (DefinedImplib *S : Symbols)
-      HintNameTables.emplace_back(S->Name);
+      HintNameTables.emplace_back(S->ExpName);
     
     for (HintNameChunk &H : HintNameTables) {
       LookupTables.emplace_back(&H);

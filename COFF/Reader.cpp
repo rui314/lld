@@ -234,10 +234,9 @@ readImplib(MemoryBufferRef MBRef, llvm::BumpPtrAllocator *Alloc) {
   if (size_t(End - Buf) != sizeof(ImportHeader) + DataSize)
     return make_dynamic_error_code("broken import library");
 
-  StringRef Name(Buf + sizeof(ImportHeader));
-  std::string ImpName = (Twine("__imp_") + Name).str();
+  std::string Name = StringRef(Buf + sizeof(ImportHeader));
   StringRef DLLName(Buf + sizeof(ImportHeader) + Name.size() + 1);
-  return new (*Alloc) DefinedImplib(DLLName, *new std::string(ImpName));
+  return new (*Alloc) DefinedImplib(DLLName, *new std::string(Name));
 }
 
 }

@@ -83,7 +83,8 @@ public:
 class DefinedImplib : public Defined {
 public:
   DefinedImplib(StringRef D, StringRef N)
-    : Defined(DefinedImplibKind), DLLName(D), Name(N) {}
+    : Defined(DefinedImplibKind), DLLName(D), Name((Twine("__imp_") + N).str()),
+      ExpName(N) {}
   static bool classof(const Symbol *S) {
     return S->kind() == DefinedImplibKind;
   }
@@ -92,7 +93,8 @@ public:
   uint64_t getFileOff() override;
 
   StringRef DLLName;
-  StringRef Name;
+  std::string Name;
+  std::string ExpName;
   Chunk *AddressTable = nullptr;
 };
 
