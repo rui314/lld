@@ -101,10 +101,6 @@ void Writer::createImportTables() {
     Tabs.push_back(new ImportTable(DLLName, Imports));
   }
 
-  OutputSection *Data = findSection(".data");
-  for (ImportTable *T : Tabs)
-    Data->addChunk(&T->DirTab.Name);
-
   // Add the directory tables.
   for (ImportTable *T : Tabs)
     Idata->addChunk(&T->DirTab);
@@ -131,6 +127,10 @@ void Writer::createImportTables() {
   for (ImportTable *T : Tabs)
     for (HintNameChunk &C : T->HintNameTables)
       Idata->addChunk(&C);
+
+  // Add DLL names.
+  for (ImportTable *T : Tabs)
+    Idata->addChunk(&T->DirTab.Name);
   OutputSections.push_back(std::move(Idata));
 }
 
