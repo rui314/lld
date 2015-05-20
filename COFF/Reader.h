@@ -93,7 +93,8 @@ class Symbol {
 public:
   enum Kind {
     DefinedRegularKind,
-    DefinedImplibKind,
+    DefinedImportDataKind,
+    DefinedImportFuncKind,
     UndefinedKind,
     CanBeDefinedKind,
   };
@@ -120,7 +121,7 @@ public:
 
   static bool classof(const Symbol *S) {
     Kind K = S->kind();
-    return K == DefinedRegularKind || K == DefinedImplibKind;
+    return DefinedRegularKind <= K && K <= DefinedImportFuncKind;
   }
 
   virtual uint64_t getRVA() = 0;
@@ -149,14 +150,14 @@ private:
   InputSection *Section;
 };
 
-class DefinedImplib : public Defined {
+class DefinedImportData : public Defined {
 public:
-  DefinedImplib(StringRef D, StringRef N)
-    : Defined(DefinedImplibKind), DLLName(D), Name((Twine("__imp_") + N).str()),
-      ExpName(N) {}
+  DefinedImportData(StringRef D, StringRef N)
+    : Defined(DefinedImportDataKind), DLLName(D),
+      Name((Twine("__imp_") + N).str()), ExpName(N) {}
 
   static bool classof(const Symbol *S) {
-    return S->kind() == DefinedImplibKind;
+    return S->kind() == DefinedImportDataKind;
   }
 
   StringRef getName() override { return Name; }

@@ -99,9 +99,9 @@ private:
 
 class ImportTable {
 public:
-  ImportTable(StringRef DLLName, std::vector<DefinedImplib *> &Symbols)
+  ImportTable(StringRef DLLName, std::vector<DefinedImportData *> &Symbols)
       : DirTab(DLLName) {
-    for (DefinedImplib *S : Symbols)
+    for (DefinedImportData *S : Symbols)
       HintNameTables.emplace_back(S->getExportName());
     
     for (HintNameChunk &H : HintNameTables) {

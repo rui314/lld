@@ -211,7 +211,7 @@ void ImplibFile::readImplib() {
 
   std::string Name = StringRef(Buf + sizeof(ImportHeader));
   StringRef DLLName(Buf + sizeof(ImportHeader) + Name.size() + 1);
-  Symbols.push_back(new DefinedImplib(DLLName, *new std::string(Name)));
+  Symbols.push_back(new DefinedImportData(DLLName, *new std::string(Name)));
 }
 
 SectionChunk::SectionChunk(InputSection *S) : Section(S) {

@@ -51,21 +51,21 @@ void Writer::groupSections() {
   }
 }
 
-std::map<StringRef, std::vector<DefinedImplib *>> Writer::groupImports() {
-  std::map<StringRef, std::vector<DefinedImplib *>> Ret;
+std::map<StringRef, std::vector<DefinedImportData *>> Writer::groupImports() {
+  std::map<StringRef, std::vector<DefinedImportData *>> Ret;
   for (std::unique_ptr<ImplibFile> &P : Res->ImplibFiles) {
     for (Symbol *S : P->getSymbols()) {
-      DefinedImplib *Sym = cast<DefinedImplib>(S);
+      DefinedImportData *Sym = cast<DefinedImportData>(S);
       Ret[Sym->getDLLName()].push_back(Sym);
     }
   }
 
   // Sort by symbol name
-  auto comp = [](DefinedImplib *A, DefinedImplib *B) {
+  auto comp = [](DefinedImportData *A, DefinedImportData *B) {
     return A->getName() < B->getName();
   };
   for (auto &P : Ret) {
-    std::vector<DefinedImplib *> &V = P.second;
+    std::vector<DefinedImportData *> &V = P.second;
     std::stable_sort(V.begin(), V.end(), comp);
   }
   return Ret;
@@ -83,7 +83,7 @@ void Writer::createImportTables() {
   std::vector<ImportTable *> Tabs;
   for (auto &P : groupImports()) {
     StringRef DLLName = P.first;
-    std::vector<DefinedImplib *> &Imports = P.second;
+    std::vector<DefinedImportData *> &Imports = P.second;
     Tabs.push_back(new ImportTable(DLLName, Imports));
   }
 

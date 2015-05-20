@@ -46,7 +46,7 @@ private:
   void applyRelocations();
   void backfillHeaders();
   OutputSection *findSection(StringRef name);
-  std::map<StringRef, std::vector<DefinedImplib *>> groupImports();
+  std::map<StringRef, std::vector<DefinedImportData *>> groupImports();
 
   Resolver *Res;
   std::unique_ptr<llvm::FileOutputBuffer> Buffer;
