@@ -31,7 +31,7 @@ using llvm::sys::fs::identify_magic;
 namespace lld {
 namespace coff {
 
-const uint32_t PermMask = 0xF0000000;
+const uint32_t PermMask = 0xF00000F0;
 
 class ArchiveFile;
 class Chunk;
@@ -39,6 +39,7 @@ class InputFile;
 class InputSection;
 class ObjectFile;
 class OutputSection;
+class Defined;
 struct SymbolRef;
 
 class Chunk {
@@ -86,6 +87,25 @@ public:
   void applyRelocations(uint8_t *Buffer) override {}
 
 private:
+  std::vector<uint8_t> Data;
+};
+
+static const uint8_t ImportFuncData[] = {
+  0xff, 0x25, 0x00, 0x00, 0x00, 0x00, // JMP *0x0
+};
+
+class ImportFuncChunk : public Chunk {
+public:
+  ImportFuncChunk(Defined *S)
+    : ImpSymbol(S),
+      Data(ImportFuncData, ImportFuncData + sizeof(ImportFuncData)) {}
+
+  const uint8_t *getData() const override { return &Data[0]; }
+  size_t getSize() const override { return Data.size(); }
+  void applyRelocations(uint8_t *Buffer) override;
+
+private:
+  Defined *ImpSymbol;
   std::vector<uint8_t> Data;
 };
 
@@ -172,6 +192,26 @@ private:
   std::string Name;
   std::string ExpName;
   Chunk *Location = nullptr;
+};
+
+class DefinedImportFunc : public Defined {
+public:
+  DefinedImportFunc(StringRef N, DefinedImportData *S)
+    : Defined(DefinedImportFuncKind), Name(N), Data(S) {}
+
+  static bool classof(const Symbol *S) {
+    return S->kind() == DefinedImportFuncKind;
+  }
+
+  StringRef getName() override { return Name; }
+  uint64_t getRVA() override { return Data.getRVA(); }
+  uint64_t getFileOff() override { return Data.getFileOff(); }
+  Chunk *getChunk() { return &Data; }
+
+private:
+  std::string Name;
+  DefinedImportData *ImpSymbol;
+  ImportFuncChunk Data;
 };
 
 class CanBeDefined : public Symbol {

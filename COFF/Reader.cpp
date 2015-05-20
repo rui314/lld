@@ -211,7 +211,13 @@ void ImplibFile::readImplib() {
 
   std::string Name = StringRef(Buf + sizeof(ImportHeader));
   StringRef DLLName(Buf + sizeof(ImportHeader) + Name.size() + 1);
-  Symbols.push_back(new DefinedImportData(DLLName, *new std::string(Name)));
+  auto *ImpSym = new DefinedImportData(DLLName, Name);
+  Symbols.push_back(ImpSym);
+
+  uint16_t TypeInfo = read16le(Buf + offsetof(ImportHeader, TypeInfo));
+  int Type = TypeInfo & 0x3;
+  if (Type == llvm::COFF::IMPORT_CODE)
+    Symbols.push_back(new DefinedImportFunc(Name, ImpSym));
 }
 
 SectionChunk::SectionChunk(InputSection *S) : Section(S) {
@@ -235,6 +241,11 @@ bool SectionChunk::isBSS() const {
 
 size_t SectionChunk::getSize() const {
   return Section->getRawSize();
+}
+
+void ImportFuncChunk::applyRelocations(uint8_t *Buffer) {
+  uint32_t Operand = ImpSymbol->getRVA() - getRVA() - 6;
+  write32le(Buffer + getFileOff() + 2, Operand);
 }
 
 bool InputSection::isCOMDAT() const {

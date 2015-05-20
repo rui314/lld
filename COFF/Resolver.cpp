@@ -30,13 +30,12 @@ std::error_code Resolver::addFile(std::unique_ptr<InputFile> File) {
 std::error_code Resolver::addFile(ObjectFile *File) {
   ObjectFiles.emplace_back(File);
   for (Symbol *Sym : File->getSymbols()) {
-    StringRef Name = Sym->getName();
     if (Sym->isExternal()) {
       // Only externally-visible symbols are subjects of symbol
       // resolution.
-      if (auto EC = resolve(Name, Sym))
+      if (auto EC = resolve(Sym))
 	return EC;
-      Sym->setSymbolRef(Symtab[Name]);
+      Sym->setSymbolRef(Symtab[Sym->getName()]);
     } else {
       Sym->setSymbolRef(new SymbolRef(Sym));
     }
@@ -47,7 +46,7 @@ std::error_code Resolver::addFile(ObjectFile *File) {
 std::error_code Resolver::addFile(ArchiveFile *File) {
   ArchiveFiles.emplace_back(File);
   for (Symbol *Sym : File->getSymbols())
-    if (auto EC = resolve(Sym->getName(), Sym))
+    if (auto EC = resolve(Sym))
       return EC;
   return std::error_code();
 }
@@ -55,7 +54,7 @@ std::error_code Resolver::addFile(ArchiveFile *File) {
 std::error_code Resolver::addFile(ImplibFile *File) {
   ImplibFiles.emplace_back(File);
   for (Symbol *Sym : File->getSymbols())
-    if (auto EC = resolve(Sym->getName(), Sym))
+    if (auto EC = resolve(Sym))
       return EC;
   return std::error_code();
 }
@@ -100,7 +99,8 @@ bool Resolver::reportRemainingUndefines() {
 // [Defined Defined]
 // Resolve them according to COMDAT values if both are COMDAT symbols.
 // It's an error if they are not COMDAT.
-std::error_code Resolver::resolve(StringRef Name, Symbol *Sym) {
+std::error_code Resolver::resolve(Symbol *Sym) {
+  StringRef Name = Sym->getName();
   if (Symtab.count(Name) == 0)
     Symtab[Name] = new SymbolRef();
   SymbolRef *Ref = Symtab[Name];
@@ -127,7 +127,8 @@ std::error_code Resolver::resolve(StringRef Name, Symbol *Sym) {
       return std::error_code();
     }
     if (isa<CanBeDefined>(Sym)) {
-      llvm::errs() << "Two or more library files define the same symbol\n";
+      llvm::errs() << "Two or more library files define the same symbol: "
+		   << Sym->getName() << "\n";
       return std::error_code();
     }
     assert(isa<Undefined>(Sym));

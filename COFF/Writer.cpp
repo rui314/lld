@@ -53,10 +53,14 @@ void Writer::groupSections() {
 
 std::map<StringRef, std::vector<DefinedImportData *>> Writer::groupImports() {
   std::map<StringRef, std::vector<DefinedImportData *>> Ret;
+  OutputSection *Text = findSection(".text");
   for (std::unique_ptr<ImplibFile> &P : Res->ImplibFiles) {
     for (Symbol *S : P->getSymbols()) {
-      DefinedImportData *Sym = cast<DefinedImportData>(S);
-      Ret[Sym->getDLLName()].push_back(Sym);
+      if (auto *Sym = dyn_cast<DefinedImportData>(S)) {
+	Ret[Sym->getDLLName()].push_back(Sym);
+	continue;
+      }
+      Text->addChunk(cast<DefinedImportFunc>(S)->getChunk());
     }
   }
 
@@ -230,9 +234,12 @@ void Writer::backfillHeaders() {
     PE->BaseOfCode = Text->getRVA();
     PE->SizeOfCode = Text->getRawSize();
   }
+  if (OutputSection *Data = findSection(".data")) {
+    PE->SizeOfInitializedData = Data->getRawSize();
+  }
   if (OutputSection *Idata = findSection(".idata")) {
     DataDirectory[COFF::IMPORT_TABLE].RelativeVirtualAddress = Idata->getRVA();
-    DataDirectory[COFF::IMPORT_TABLE].Size = Idata->getRawSize();
+    DataDirectory[COFF::IMPORT_TABLE].Size = Idata->getVirtualSize();
     DataDirectory[COFF::IAT].RelativeVirtualAddress = IAT->getRVA();
     DataDirectory[COFF::IAT].Size = IAT->getSize();
   }

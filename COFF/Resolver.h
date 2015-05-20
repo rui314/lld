@@ -33,7 +33,7 @@ private:
   std::error_code addFile(ArchiveFile *File);
   std::error_code addFile(ImplibFile *File);
 
-  std::error_code resolve(StringRef Name, Symbol *Sym);
+  std::error_code resolve(Symbol *Sym);
   std::error_code addMemberFile(CanBeDefined *Sym);
 
   std::vector<std::unique_ptr<ObjectFile>> ObjectFiles;
