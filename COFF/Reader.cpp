@@ -174,6 +174,18 @@ std::error_code ObjectFile::initSections() {
   return std::error_code();
 }
 
+StringRef ImplibFile::getName() {
+  return MBRef.getBufferIdentifier();
+}
+
+ImplibFile::ImplibFile(MemoryBufferRef M)
+    : InputFile(ImplibKind), MBRef(M) {
+  ErrorOr<Symbol *> SymOrErr = readImplib(MBRef);
+  if (SymOrErr.getError())
+    return;
+  Symbols.push_back(SymOrErr.get());
+}
+
 SectionChunk::SectionChunk(InputSection *S) : Section(S) {
   if (!isBSS())
     Section->File->COFFFile->getSectionContents(Section->Header, Data);

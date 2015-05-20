@@ -26,11 +26,12 @@ public:
 
   uint64_t getRVA(StringRef Symbol);
 
-  std::vector<DefinedImplib *> ImpSyms;
+  std::vector<std::unique_ptr<ImplibFile>> ImplibFiles;
 
 private:
   std::error_code addFile(ObjectFile *File);
   std::error_code addFile(ArchiveFile *File);
+  std::error_code addFile(ImplibFile *File);
 
   std::error_code resolve(StringRef Name, Symbol *Sym);
   std::error_code addMemberFile(CanBeDefined *Sym);

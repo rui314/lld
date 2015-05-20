@@ -56,6 +56,14 @@ std::error_code Resolver::addFile(ArchiveFile *File) {
   return std::error_code();
 }
 
+std::error_code Resolver::addFile(ImplibFile *File) {
+  ImplibFiles.emplace_back(File);
+  for (Symbol *Sym : File->getSymbols())
+    if (auto EC = resolve(Sym->getName(), Sym))
+      return EC;
+  return std::error_code();
+}
+
 bool Resolver::reportRemainingUndefines() {
   for (auto &I : Symtab) {
     SymbolRef *Ref = I.second;
@@ -151,14 +159,8 @@ std::error_code Resolver::addMemberFile(CanBeDefined *Sym) {
     return std::error_code();
 
   file_magic Magic = identify_magic(StringRef(MBRef.getBuffer()));
-  if (Magic == file_magic::coff_import_library) {
-    auto SymOrErr = readImplib(MBRef);
-    if (auto EC = SymOrErr.getError())
-      return EC;
-    DefinedImplib *Imp = SymOrErr.get();
-    ImpSyms.push_back(Imp);
-    return resolve(Imp->Name, Imp);
-  }
+  if (Magic == file_magic::coff_import_library)
+    return addFile(new ImplibFile(MBRef));
 
   if (Magic != file_magic::coff_object)
     return make_dynamic_error_code("unknown file type");

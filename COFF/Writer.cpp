@@ -65,25 +65,28 @@ void Writer::groupSections() {
   }
 }
 
-std::map<StringRef, std::vector<DefinedImplib *>>
-groupImports(std::vector<DefinedImplib *> Impsyms) {
-  std::map<StringRef, std::vector<DefinedImplib *>> Res;
-  for (DefinedImplib *S : Impsyms)
-    Res[S->DLLName].push_back(S);
+std::map<StringRef, std::vector<DefinedImplib *>> Writer::groupImports() {
+  std::map<StringRef, std::vector<DefinedImplib *>> Ret;
+  for (std::unique_ptr<ImplibFile> &P : Res->ImplibFiles) {
+    for (Symbol *S : P->getSymbols()) {
+      DefinedImplib *Sym = cast<DefinedImplib>(S);
+      Ret[Sym->DLLName].push_back(Sym);
+    }
+  }
 
   // Sort by symbol name
   auto comp = [](const DefinedImplib *A, const DefinedImplib *B) {
     return A->Name < B->Name;
   };
-  for (auto &P : Res) {
+  for (auto &P : Ret) {
     std::vector<DefinedImplib *> &V = P.second;
     std::stable_sort(V.begin(), V.end(), comp);
   }
-  return Res;
+  return Ret;
 }
 
 void Writer::createImportTables() {
-  if (Res->ImpSyms.empty())
+  if (Res->ImplibFiles.empty())
     return;
   
   std::unique_ptr<OutputSection> Idata(
@@ -92,7 +95,7 @@ void Writer::createImportTables() {
 				   | llvm::COFF::IMAGE_SCN_MEM_READ);
 
   std::vector<ImportTable *> Tabs;
-  for (auto &P : groupImports(Res->ImpSyms)) {
+  for (auto &P : groupImports()) {
     StringRef DLLName = P.first;
     std::vector<DefinedImplib *> &Imports = P.second;
     Tabs.push_back(new ImportTable(DLLName, Imports));

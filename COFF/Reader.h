@@ -100,6 +100,7 @@ public:
     return S->kind() == DefinedImplibKind;
   }
 
+  StringRef getName() override { return Name; }
   uint64_t getRVA() override;
   uint64_t getFileOff() override;
 
@@ -144,7 +145,7 @@ struct SymbolRef {
 
 class InputFile {
 public:
-  enum Kind { ArchiveKind, ObjectKind };
+  enum Kind { ArchiveKind, ObjectKind, ImplibKind };
   Kind kind() const { return FileKind; }
   virtual ~InputFile() {}
 
@@ -204,6 +205,20 @@ private:
     : InputFile(ObjectKind), Name(N), COFFFile(std::move(F)) {}
 
   std::unique_ptr<MemoryBuffer> MB;
+};
+
+class ImplibFile : public InputFile {
+public:
+  ImplibFile(MemoryBufferRef M);
+
+  static bool classof(const InputFile *F) { return F->kind() == ImplibKind; }
+
+  StringRef getName() override;
+  std::vector<Symbol *> getSymbols() override { return Symbols; }
+
+private:
+  MemoryBufferRef MBRef;
+  std::vector<Symbol *> Symbols;
 };
 
 class Chunk {
