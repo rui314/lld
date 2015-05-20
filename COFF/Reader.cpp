@@ -33,19 +33,11 @@ bool DefinedRegular::isCOMDAT() const {
 }
 
 uint64_t DefinedRegular::getRVA() {
-  return Section->Chunk.RVA + Sym.getValue();
+  return Section->getChunk()->getRVA() + Sym.getValue();
 }
 
 uint64_t DefinedRegular::getFileOff() {
-  return Section->Chunk.FileOff + Sym.getValue();
-}
-
-uint64_t DefinedImplib::getRVA() {
-  return AddressTable->RVA;
-}
-
-uint64_t DefinedImplib::getFileOff() {
-  return AddressTable->FileOff;
+  return Section->getChunk()->getFileOff() + Sym.getValue();
 }
 
 ErrorOr<std::unique_ptr<InputFile>> CanBeDefined::getMember() {
@@ -174,7 +166,7 @@ std::vector<Symbol *> ObjectFile::getSymbols() {
       P = new DefinedRegular(this, SymbolName, Sref);
     }
     if (P) {
-      P->SymbolRefPP = &Symbols[I];
+      P->setSymbolRefAddress(&Symbols[I]);
       Ret.push_back(P);
     }
     I += Sref.getNumberOfAuxSymbols();
@@ -201,17 +193,31 @@ StringRef ImplibFile::getName() {
 
 ImplibFile::ImplibFile(MemoryBufferRef M)
     : InputFile(ImplibKind), MBRef(M) {
-  ErrorOr<Symbol *> SymOrErr = readImplib(MBRef);
-  if (SymOrErr.getError())
+  readImplib();
+}
+
+void ImplibFile::readImplib() {
+  const char *Buf = MBRef.getBufferStart();
+  const char *End = MBRef.getBufferEnd();
+
+  // The size of the string that follows the header.
+  uint32_t DataSize = read32le(Buf + offsetof(ImportHeader, SizeOfData));
+
+  // Check if the total size is valid.
+  if (size_t(End - Buf) != sizeof(ImportHeader) + DataSize) {
+    llvm::errs() << "broken import library";
     return;
-  Symbols.push_back(SymOrErr.get());
+  }
+
+  std::string Name = StringRef(Buf + sizeof(ImportHeader));
+  StringRef DLLName(Buf + sizeof(ImportHeader) + Name.size() + 1);
+  Symbols.push_back(new DefinedImplib(DLLName, *new std::string(Name)));
 }
 
 SectionChunk::SectionChunk(InputSection *S) : Section(S) {
   if (!isBSS())
-    Section->File->COFFFile->getSectionContents(Section->Header, Data);
-  unsigned Shift = ((Section->Header->Characteristics & 0x00F00000) >> 20) - 1;
-  Align = uint64_t(1) << Shift;
+    Section->getSectionContents(&Data);
+  setAlign(S->getAlign());
 }
 
 const uint8_t *SectionChunk::getData() const {
@@ -224,16 +230,24 @@ void SectionChunk::applyRelocations(uint8_t *Buffer) {
 }
 
 bool SectionChunk::isBSS() const {
-  return Section->Header->Characteristics
-    & llvm::COFF::IMAGE_SCN_CNT_UNINITIALIZED_DATA;
+  return Section->isBSS();
 }
 
 size_t SectionChunk::getSize() const {
-  return Section->Header->SizeOfRawData;
+  return Section->getRawSize();
 }
 
 bool InputSection::isCOMDAT() const {
   return Header->Characteristics & llvm::COFF::IMAGE_SCN_LNK_COMDAT;
+}
+
+uint32_t InputSection::getAlign() const {
+  unsigned Shift = ((Header->Characteristics & 0x00F00000) >> 20) - 1;
+  return uint32_t(1) << Shift;
+}
+
+bool InputSection::isBSS() const {
+  return Header->Characteristics & llvm::COFF::IMAGE_SCN_CNT_UNINITIALIZED_DATA;
 }
 
 void InputSection::applyRelocations(uint8_t *Buffer) {
@@ -246,6 +260,10 @@ void InputSection::applyRelocations(uint8_t *Buffer) {
   }
 }
 
+void InputSection::getSectionContents(ArrayRef<uint8_t> *Data) {
+  File->COFFFile->getSectionContents(Header, *Data);
+}
+
 static void add16(uint8_t *L, int32_t V) { write16le(L, read16le(L) + V); }
 static void add32(uint8_t *L, int32_t V) { write32le(L, read32le(L) + V); }
 static void add64(uint8_t *L, int64_t V) { write64le(L, read64le(L) + V); }
@@ -254,10 +272,10 @@ void InputSection::applyRelocation(uint8_t *Buffer, const coff_relocation *Rel) 
   using namespace llvm::COFF;
   const uint64_t ImageBase = 0x140000000;
 
-  uint8_t *Off = Buffer + Chunk.FileOff + Rel->VirtualAddress;
+  uint8_t *Off = Buffer + Chunk.getFileOff() + Rel->VirtualAddress;
   auto *Sym = cast<Defined>(File->Symbols[Rel->SymbolTableIndex]->Ptr);
   uint64_t S = Sym->getRVA();
-  uint64_t P = Chunk.RVA + Rel->VirtualAddress;
+  uint64_t P = Chunk.getRVA() + Rel->VirtualAddress;
   if (Rel->Type == IMAGE_REL_AMD64_ADDR32) {
     add32(Off, ImageBase + S);
   } else if (Rel->Type == IMAGE_REL_AMD64_ADDR64) {
@@ -277,9 +295,9 @@ void InputSection::applyRelocation(uint8_t *Buffer, const coff_relocation *Rel) 
   } else if (Rel->Type == IMAGE_REL_AMD64_REL32_5) {
     add32(Off, S - P - 9);
   } else if (Rel->Type == IMAGE_REL_AMD64_SECTION) {
-    add16(Off, Out->SectionIndex);
+    add16(Off, Out->getSectionIndex());
   } else if (Rel->Type == IMAGE_REL_AMD64_SECREL) {
-    add32(Off, S - Out->Header.VirtualAddress);
+    add32(Off, S - Out->getRVA());
   } else {
     llvm::report_fatal_error("Unsupported relocation type");
   }
@@ -294,42 +312,30 @@ OutputSection::OutputSection(StringRef N, uint32_t SI)
 void OutputSection::setRVA(uint64_t RVA) {
   Header.VirtualAddress = RVA;
   for (Chunk *C : Chunks)
-    C->RVA += RVA;
+    C->setRVA(C->getRVA() + RVA);
 }
 
 void OutputSection::setFileOffset(uint64_t Off) {
   Header.PointerToRawData = Off;
   for (Chunk *C : Chunks)
-    C->FileOff += Off;
+    C->setFileOff(C->getFileOff() + Off);
 }
 
 void OutputSection::addChunk(Chunk *C) {
   const int FileAlignment = 512;
   Chunks.push_back(C);
   uint64_t Off = Header.VirtualSize;
-  Off = RoundUpToAlignment(Off, C->Align);
-  C->RVA = Off;
-  C->FileOff = Off;
+  Off = RoundUpToAlignment(Off, C->getAlign());
+  C->setRVA(Off);
+  C->setFileOff(Off);
   Off += C->getSize();
   Header.VirtualSize = Off;
   if (!C->isBSS())
     Header.SizeOfRawData = RoundUpToAlignment(Off, FileAlignment);
 }
 
-ErrorOr<DefinedImplib *> readImplib(MemoryBufferRef MBRef) {
-  const char *Buf = MBRef.getBufferStart();
-  const char *End = MBRef.getBufferEnd();
-
-  // The size of the string that follows the header.
-  uint32_t DataSize = read32le(Buf + offsetof(ImportHeader, SizeOfData));
-
-  // Check if the total size is valid.
-  if (size_t(End - Buf) != sizeof(ImportHeader) + DataSize)
-    return make_dynamic_error_code("broken import library");
-
-  std::string Name = StringRef(Buf + sizeof(ImportHeader));
-  StringRef DLLName(Buf + sizeof(ImportHeader) + Name.size() + 1);
-  return new DefinedImplib(DLLName, *new std::string(Name));
+void OutputSection::addPermission(uint32_t C) {
+  Header.Characteristics = Header.Characteristics | (C & PermMask);
 }
 
 }

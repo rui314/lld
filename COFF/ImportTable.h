@@ -51,7 +51,7 @@ public:
   size_t getSize() const override { return sizeof(Ent); }
 
   void applyRelocations(uint8_t *Buffer) override {
-    write32le(Buffer + FileOff, HintName->RVA);
+    write32le(Buffer + getFileOff(), HintName->getRVA());
   }
 
   HintNameChunk *HintName;
@@ -71,10 +71,10 @@ public:
   size_t getSize() const override { return sizeof(Ent); }
 
   void applyRelocations(uint8_t *Buffer) override {
-    auto *E = reinterpret_cast<llvm::COFF::ImportDirectoryTableEntry *>(Buffer + FileOff);
-    E->ImportLookupTableRVA = LookupTab->RVA;
-    E->NameRVA = Name.RVA;
-    E->ImportAddressTableRVA = AddressTab->RVA;
+    auto *E = reinterpret_cast<llvm::COFF::ImportDirectoryTableEntry *>(Buffer + getFileOff());
+    E->ImportLookupTableRVA = LookupTab->getRVA();
+    E->NameRVA = Name.getRVA();
+    E->ImportAddressTableRVA = AddressTab->getRVA();
   }
 
   StringChunk Name;
@@ -102,7 +102,7 @@ public:
   ImportTable(StringRef DLLName, std::vector<DefinedImplib *> &Symbols)
       : DirTab(DLLName) {
     for (DefinedImplib *S : Symbols)
-      HintNameTables.emplace_back(S->ExpName);
+      HintNameTables.emplace_back(S->getExportName());
     
     for (HintNameChunk &H : HintNameTables) {
       LookupTables.emplace_back(&H);
@@ -110,7 +110,7 @@ public:
     }
 
     for (int I = 0, E = Symbols.size(); I < E; ++I)
-      Symbols[I]->AddressTable = &AddressTables[I];
+      Symbols[I]->setLocation(&AddressTables[I]);
 
     DirTab.LookupTab = &LookupTables[0];
     DirTab.AddressTab = &AddressTables[0];

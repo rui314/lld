@@ -36,9 +36,9 @@ std::error_code Resolver::addFile(ObjectFile *File) {
       // resolution.
       if (auto EC = resolve(Name, Sym))
 	return EC;
-      *Sym->SymbolRefPP = Symtab[Name];
+      Sym->setSymbolRef(Symtab[Name]);
     } else {
-      *Sym->SymbolRefPP = new SymbolRef(Sym);
+      Sym->setSymbolRef(new SymbolRef(Sym));
     }
   }
   return std::error_code();
@@ -161,7 +161,7 @@ uint64_t Resolver::getRVA(StringRef Symbol) {
   if (It == Symtab.end())
     return 0;
   SymbolRef *Ref = It->second;
-  return cast<DefinedRegular>(Ref->Ptr)->getRVA();
+  return cast<Defined>(Ref->Ptr)->getRVA();
 }
 
 } // namespace coff

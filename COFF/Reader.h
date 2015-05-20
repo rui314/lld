@@ -31,6 +31,8 @@ using llvm::sys::fs::identify_magic;
 namespace lld {
 namespace coff {
 
+const uint32_t PermMask = 0xF0000000;
+
 class ArchiveFile;
 class Chunk;
 class InputFile;
@@ -38,6 +40,54 @@ class InputSection;
 class ObjectFile;
 class OutputSection;
 struct SymbolRef;
+
+class Chunk {
+public:
+  virtual const uint8_t *getData() const = 0;
+  virtual size_t getSize() const = 0;
+  virtual void applyRelocations(uint8_t *Buffer) = 0;
+  virtual bool isBSS() const { return false; }
+
+  uint64_t getRVA() { return RVA; }
+  uint64_t getFileOff() { return FileOff; }
+  uint64_t getAlign() { return Align; }
+  void setRVA(uint64_t V) { RVA = V; }
+  void setFileOff(uint64_t V) { FileOff = V; }
+  void setAlign(uint64_t V) { Align = V; }
+
+private:
+  uint64_t RVA = 0;
+  uint64_t FileOff = 0;
+  uint64_t Align = 1;
+};
+
+class SectionChunk : public Chunk {
+public:
+  SectionChunk(InputSection *S);
+  const uint8_t *getData() const override;
+  size_t getSize() const override;
+  void applyRelocations(uint8_t *Buffer) override;
+  bool isBSS() const override;
+
+private:
+  ArrayRef<uint8_t> Data;
+  InputSection *Section;
+};
+
+class StringChunk : public Chunk {
+public:
+  StringChunk(StringRef S) : Data(S.size() + 1) {
+    memcpy(Data.data(), S.data(), S.size());
+    Data[S.size()] = 0;
+  }
+
+  const uint8_t *getData() const override { return &Data[0]; }
+  size_t getSize() const override { return Data.size(); }
+  void applyRelocations(uint8_t *Buffer) override {}
+
+private:
+  std::vector<uint8_t> Data;
+};
 
 class Symbol {
 public:
@@ -51,26 +101,28 @@ public:
   virtual ~Symbol() {}
 
   virtual bool isExternal() { return true; }
-  virtual StringRef getName() {
-    llvm::report_fatal_error("not implemented");
-  }
+  virtual StringRef getName() = 0;
 
-  SymbolRef **SymbolRefPP = nullptr;
+  void setSymbolRefAddress(SymbolRef **PP) { SymbolRefPP = PP; }
+  void setSymbolRef(SymbolRef *P) { *SymbolRefPP = P; }
 
 protected:
   Symbol(Kind K) : SymbolKind(K) {}
 
 private:
   const Kind SymbolKind;
+  SymbolRef **SymbolRefPP = nullptr;
 };
 
 class Defined : public Symbol {
 public:
   Defined(Kind K) : Symbol(K) {}
+
   static bool classof(const Symbol *S) {
     Kind K = S->kind();
     return K == DefinedRegularKind || K == DefinedImplibKind;
   }
+
   virtual uint64_t getRVA() = 0;
   virtual uint64_t getFileOff() = 0;
   virtual bool isCOMDAT() const { return false; }
@@ -79,6 +131,7 @@ public:
 class DefinedRegular : public Defined {
 public:
   DefinedRegular(ObjectFile *F, StringRef N, COFFSymbolRef SymRef);
+
   static bool classof(const Symbol *S) {
     return S->kind() == DefinedRegularKind;
   }
@@ -89,6 +142,7 @@ public:
   bool isCOMDAT() const override;
   bool isExternal() override { return Sym.isExternal(); }
 
+private:
   ObjectFile *File;
   StringRef Name;
   COFFSymbolRef Sym;
@@ -100,18 +154,23 @@ public:
   DefinedImplib(StringRef D, StringRef N)
     : Defined(DefinedImplibKind), DLLName(D), Name((Twine("__imp_") + N).str()),
       ExpName(N) {}
+
   static bool classof(const Symbol *S) {
     return S->kind() == DefinedImplibKind;
   }
 
   StringRef getName() override { return Name; }
-  uint64_t getRVA() override;
-  uint64_t getFileOff() override;
+  uint64_t getRVA() override { return Location->getRVA(); }
+  uint64_t getFileOff() override { return Location->getFileOff(); }
+  StringRef getDLLName() { return DLLName; }
+  StringRef getExportName() { return ExpName; }
+  void setLocation(Chunk *AddressTable) { Location = AddressTable; }
 
+private:
   StringRef DLLName;
   std::string Name;
   std::string ExpName;
-  Chunk *AddressTable = nullptr;
+  Chunk *Location = nullptr;
 };
 
 class CanBeDefined : public Symbol {
@@ -119,11 +178,14 @@ public:
   CanBeDefined(ArchiveFile *F, const Archive::Symbol S)
     : Symbol(CanBeDefinedKind), Name(S.getName()), File(F), Sym(S) {}
 
-  static bool classof(const Symbol *S) { return S->kind() == CanBeDefinedKind; }
-  ErrorOr<std::unique_ptr<InputFile>> getMember();
+  static bool classof(const Symbol *S) {
+    return S->kind() == CanBeDefinedKind;
+  }
 
   StringRef getName() override { return Name; }
+  ErrorOr<std::unique_ptr<InputFile>> getMember();
 
+private:
   StringRef Name;
   ArchiveFile *File;
   const Archive::Symbol Sym;
@@ -131,12 +193,16 @@ public:
 
 class Undefined : public Symbol {
 public:
- Undefined(ObjectFile *F, StringRef N)
-   : Symbol(UndefinedKind), File(F), Name(N) {}
-  static bool classof(const Symbol *S) { return S->kind() == UndefinedKind; }
+  Undefined(ObjectFile *F, StringRef N)
+    : Symbol(UndefinedKind), File(F), Name(N) {}
+
+  static bool classof(const Symbol *S) {
+    return S->kind() == UndefinedKind;
+  }
 
   StringRef getName() override { return Name; }
 
+private:
   ObjectFile *File;
   StringRef Name;
 };
@@ -221,48 +287,10 @@ public:
   std::vector<Symbol *> getSymbols() override { return Symbols; }
 
 private:
+  void readImplib();
+
   MemoryBufferRef MBRef;
   std::vector<Symbol *> Symbols;
-};
-
-class Chunk {
-public:
-  virtual const uint8_t *getData() const = 0;
-  virtual size_t getSize() const = 0;
-  virtual void applyRelocations(uint8_t *Buffer) = 0;
-  virtual bool isBSS() const { return false; }
-
-  uint64_t RVA = 0;
-  uint64_t FileOff = 0;
-  uint64_t Align = 1;
-};
-
-class SectionChunk : public Chunk {
-public:
-  SectionChunk(InputSection *S);
-  const uint8_t *getData() const override;
-  size_t getSize() const override;
-  void applyRelocations(uint8_t *Buffer) override;
-  bool isBSS() const override;
-
-private:
-  ArrayRef<uint8_t> Data;
-  InputSection *Section;
-};
-
-class StringChunk : public Chunk {
-public:
-  StringChunk(StringRef S) : Data(S.size() + 1) {
-    memcpy(Data.data(), S.data(), S.size());
-    Data[S.size()] = 0;
-  }
-
-  const uint8_t *getData() const override { return &Data[0]; }
-  size_t getSize() const override { return Data.size(); }
-  void applyRelocations(uint8_t *Buffer) override {}
-
-private:
-  std::vector<uint8_t> Data;
 };
 
 class InputSection {
@@ -274,34 +302,54 @@ public:
 
   bool isCOMDAT() const;
   void applyRelocations(uint8_t *Buffer);
-
-  ObjectFile *File;
-  const coff_section *Header;
-  SectionChunk Chunk;
-  StringRef Name;
-  OutputSection *Out = nullptr;
+  StringRef getName() { return Name; }
+  StringRef getNameDropDollar() { return Name.substr(0, Name.find('$')); }
+  void setOutputSection(OutputSection *O) { Out = O; }
+  Chunk *getChunk() { return &Chunk; }
+  void getSectionContents(ArrayRef<uint8_t> *Data);
+  uint64_t getVirtualSize() { return Header->VirtualSize; }
+  uint64_t getRawSize() { return Header->SizeOfRawData; }
+  uint32_t getPermission() { return Header->Characteristics & PermMask; }
+  uint32_t getAlign() const;
+  bool isBSS() const;
 
 private:
   void applyRelocation(uint8_t *Buffer, const coff_relocation *Rel);
-  uint64_t getAlign() const;
+
+  const coff_section *Header;
+  ObjectFile *File;
+  SectionChunk Chunk;
+  OutputSection *Out = nullptr;
+  StringRef Name;
 };
 
 class OutputSection {
 public:
-  OutputSection(StringRef N, uint32_t SI);
+  OutputSection(StringRef Nam, uint32_t SectionIndex);
   void setRVA(uint64_t);
   void setFileOffset(uint64_t);
   void addChunk(Chunk *C);
+  StringRef getName() { return Name; }
+  uint64_t getSectionIndex() { return SectionIndex; }
+  std::vector<Chunk *> &getChunks() { return Chunks; }
 
+  const llvm::object::coff_section *getHeader() { return &Header; }
+  void addPermission(uint32_t C);
+  uint32_t getPermission() { return Header.Characteristics & PermMask; }
+  uint32_t getCharacteristics() { return Header.Characteristics; }
+  uint64_t getRVA() { return Header.VirtualAddress; }
+  uint64_t getFileOff() { return Header.PointerToRawData; }
+  uint64_t getVirtualSize() { return Header.VirtualSize; }
+  uint64_t getRawSize() { return Header.SizeOfRawData; }
+
+private:
+  llvm::object::coff_section Header;
   StringRef Name;
   uint32_t SectionIndex;
-  llvm::object::coff_section Header;
   std::vector<Chunk *> Chunks;
 };
 
 typedef std::map<llvm::StringRef, SymbolRef *> SymbolTable;
-
-ErrorOr<DefinedImplib *> readImplib(MemoryBufferRef MBRef);
 
 } // namespace coff
 } // namespace lld

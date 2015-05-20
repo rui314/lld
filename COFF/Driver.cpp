@@ -139,7 +139,7 @@ bool link(int Argc, const char *Argv[]) {
     ErrorOr<std::unique_ptr<InputFile>> FileOrErr = createFile(Path);
     if (auto EC = FileOrErr.getError()) {
       llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";
-      continue;
+      return false;
     }
     if (auto EC = Res.addFile(std::move(FileOrErr.get()))) {
       llvm::errs() << "addFile failed: " << Path << ": " << EC.message() << "\n";
