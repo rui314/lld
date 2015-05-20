@@ -160,6 +160,8 @@ private:
 
 class ArchiveFile : public InputFile {
 public:
+  static bool classof(const InputFile *F) { return F->kind() == ArchiveKind; }
+
   static ErrorOr<std::unique_ptr<ArchiveFile>> create(StringRef Path);
 
   StringRef getName() override { return Name; }
@@ -181,6 +183,8 @@ private:
 
 class ObjectFile : public InputFile {
 public:
+  static bool classof(const InputFile *F) { return F->kind() == ObjectKind; }
+
   static ErrorOr<std::unique_ptr<ObjectFile>> create(StringRef Path);
   static ErrorOr<std::unique_ptr<ObjectFile>>
     create(StringRef Path, MemoryBufferRef MB);

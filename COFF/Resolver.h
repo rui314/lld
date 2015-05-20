@@ -17,11 +17,11 @@ namespace coff {
 
 class Resolver {
 public:
-  std::error_code addFile(std::unique_ptr<ObjectFile> File);
-  std::error_code addFile(std::unique_ptr<ArchiveFile> Archive);
+  std::error_code addFile(std::unique_ptr<InputFile> File);
   bool reportRemainingUndefines();
+
   std::vector<std::unique_ptr<ObjectFile>> &getFiles() {
-    return Files;
+    return ObjectFiles;
   }
 
   uint64_t getRVA(StringRef Symbol);
@@ -29,11 +29,14 @@ public:
   std::vector<DefinedImplib *> ImpSyms;
 
 private:
+  std::error_code addFile(ObjectFile *File);
+  std::error_code addFile(ArchiveFile *File);
+
   std::error_code resolve(StringRef Name, Symbol *Sym);
   std::error_code addMemberFile(CanBeDefined *Sym);
 
-  std::vector<std::unique_ptr<ObjectFile>> Files;
-  std::vector<std::unique_ptr<ArchiveFile>> Archives;
+  std::vector<std::unique_ptr<ObjectFile>> ObjectFiles;
+  std::vector<std::unique_ptr<ArchiveFile>> ArchiveFiles;
   SymbolTable Symtab;
 };
 

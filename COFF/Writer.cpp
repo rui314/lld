@@ -39,23 +39,20 @@ mergeCharacteristics(const coff_section &A, const coff_section &B) {
   return (A.Characteristics | B.Characteristics) & Mask;
 }
 
-static void sortByName(std::vector<InputSection *> *Sections) {
-  auto comp = [](const InputSection *A, const InputSection *B) {
-    return A->Name < B->Name;
-  };
-  std::stable_sort(Sections->begin(), Sections->end(), comp);
-}
-
 void Writer::groupSections() {
   std::map<StringRef, std::vector<InputSection *>> Map;
   for (std::unique_ptr<ObjectFile> &File : Res->getFiles())
     for (InputSection &Sec : File->Sections)
       Map[stripDollar(Sec.Name)].push_back(&Sec);
 
+  auto comp = [](const InputSection *A, const InputSection *B) {
+    return A->Name < B->Name;
+  };
+
   for (auto &P : Map) {
     StringRef SectionName = P.first;
     std::vector<InputSection *> &InputSections = P.second;
-    sortByName(&InputSections);
+    std::stable_sort(InputSections.begin(), InputSections.end(), comp);
     std::unique_ptr<OutputSection> OSec(
       new OutputSection(SectionName, OutputSections.size()));
     for (InputSection *ISec : InputSections) {

@@ -66,8 +66,7 @@ public:
 };
 }
 
-static std::string
-getOutputPath(std::unique_ptr<llvm::opt::InputArgList> &Args) {
+static std::string getOutputPath(llvm::opt::InputArgList *Args) {
   if (auto *Arg = Args->getLastArg(OPT_out))
     return Arg->getValue();
   auto *Arg = *Args->filtered_begin(OPT_INPUT);
@@ -105,6 +104,12 @@ static std::string findFile(StringRef Filename) {
 namespace lld {
 namespace coff {
 
+static ErrorOr<std::unique_ptr<InputFile>> createFile(StringRef Path) {
+  if (StringRef(Path).endswith_lower(".lib"))
+    return ArchiveFile::create(Path);
+  return ObjectFile::create(Path);
+}
+
 bool link(int Argc, const char *Argv[]) {
   COFFOptTable Table;
   unsigned MissingIndex;
@@ -131,19 +136,7 @@ bool link(int Argc, const char *Argv[]) {
   Resolver Res;
   for (auto *Arg : Args->filtered(OPT_INPUT)) {
     std::string Path = findFile(Arg->getValue());
-    if (StringRef(Path).endswith_lower(".lib")) {
-      ErrorOr<std::unique_ptr<ArchiveFile>> FileOrErr = ArchiveFile::create(Path);
-      if (auto EC = FileOrErr.getError()) {
-	llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";
-	continue;
-      }
-      if (auto EC = Res.addFile(std::move(FileOrErr.get()))) {
-	llvm::errs() << "addFile failed: " << Path << ": " << EC.message() << "\n";
-	return false;
-      }
-      continue;
-    }
-    ErrorOr<std::unique_ptr<ObjectFile>> FileOrErr = ObjectFile::create(Path);
+    ErrorOr<std::unique_ptr<InputFile>> FileOrErr = createFile(Path);
     if (auto EC = FileOrErr.getError()) {
       llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";
       continue;
@@ -157,7 +150,7 @@ bool link(int Argc, const char *Argv[]) {
     return false;
 
   Writer OutFile(&Res);
-  OutFile.write(getOutputPath(Args));
+  OutFile.write(getOutputPath(Args.get()));
   return true;
 }
 

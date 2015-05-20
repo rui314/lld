@@ -22,7 +22,17 @@ using llvm::sys::fs::identify_magic;
 namespace lld {
 namespace coff {
 
-std::error_code Resolver::addFile(std::unique_ptr<ObjectFile> File) {
+std::error_code Resolver::addFile(std::unique_ptr<InputFile> File) {
+  InputFile *P = File.release();
+  if (auto *F = dyn_cast<ObjectFile>(P))
+    return addFile(F);
+  if (auto *F = dyn_cast<ArchiveFile>(P))
+    return addFile(F);
+  llvm_unreachable("unknown file type");
+}
+
+std::error_code Resolver::addFile(ObjectFile *File) {
+  ObjectFiles.emplace_back(File);
   for (Symbol *Sym : File->getSymbols()) {
     StringRef Name = Sym->getName();
     if (Sym->isExternal()) {
@@ -35,15 +45,14 @@ std::error_code Resolver::addFile(std::unique_ptr<ObjectFile> File) {
       *Sym->SymbolRefPP = new SymbolRef(Sym);
     }
   }
-  Files.push_back(std::move(File));
   return std::error_code();
 }
 
-std::error_code Resolver::addFile(std::unique_ptr<ArchiveFile> File) {
+std::error_code Resolver::addFile(ArchiveFile *File) {
+  ArchiveFiles.emplace_back(File);
   for (Symbol *Sym : File->getSymbols())
     if (auto EC = resolve(Sym->getName(), Sym))
       return EC;
-  Archives.push_back(std::move(File));
   return std::error_code();
 }
 
