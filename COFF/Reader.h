@@ -14,6 +14,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Object/Archive.h"
 #include "llvm/Object/COFF.h"
+#include "llvm/Support/FileUtilities.h"
 #include <map>
 #include <memory>
 #include <set>
@@ -24,12 +25,15 @@ using llvm::object::COFFObjectFile;
 using llvm::object::COFFSymbolRef;
 using llvm::object::coff_relocation;
 using llvm::object::coff_section;
+using llvm::sys::fs::file_magic;
+using llvm::sys::fs::identify_magic;
 
 namespace lld {
 namespace coff {
 
 class ArchiveFile;
 class Chunk;
+class InputFile;
 class InputSection;
 class ObjectFile;
 class OutputSection;
@@ -116,7 +120,7 @@ public:
     : Symbol(CanBeDefinedKind), Name(S.getName()), File(F), Sym(S) {}
 
   static bool classof(const Symbol *S) { return S->kind() == CanBeDefinedKind; }
-  ErrorOr<MemoryBufferRef> getMember();
+  ErrorOr<std::unique_ptr<InputFile>> getMember();
 
   StringRef getName() override { return Name; }
 

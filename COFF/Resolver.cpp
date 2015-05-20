@@ -11,13 +11,7 @@
 #include "lld/Core/Error.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Support/FileUtilities.h"
 #include "llvm/Support/raw_ostream.h"
-
-using llvm::object::Binary;
-using llvm::object::createBinary;
-using llvm::sys::fs::file_magic;
-using llvm::sys::fs::identify_magic;
 
 namespace lld {
 namespace coff {
@@ -27,6 +21,8 @@ std::error_code Resolver::addFile(std::unique_ptr<InputFile> File) {
   if (auto *F = dyn_cast<ObjectFile>(P))
     return addFile(F);
   if (auto *F = dyn_cast<ArchiveFile>(P))
+    return addFile(F);
+  if (auto *F = dyn_cast<ImplibFile>(P))
     return addFile(F);
   llvm_unreachable("unknown file type");
 }
@@ -148,29 +144,16 @@ std::error_code Resolver::resolve(StringRef Name, Symbol *Sym) {
 }
 
 std::error_code Resolver::addMemberFile(CanBeDefined *Sym) {
-  auto MBRefOrErr = Sym->getMember();
-  if (auto EC = MBRefOrErr.getError())
+  auto FileOrErr = Sym->getMember();
+  if (auto EC = FileOrErr.getError())
     return EC;
-  MemoryBufferRef MBRef = MBRefOrErr.get();
+  std::unique_ptr<InputFile> File = std::move(FileOrErr.get());
 
   // getMember returns an empty buffer if the member was already
   // read from the library.
-  if (MBRef.getBuffer().empty())
+  if (!File)
     return std::error_code();
-
-  file_magic Magic = identify_magic(StringRef(MBRef.getBuffer()));
-  if (Magic == file_magic::coff_import_library)
-    return addFile(new ImplibFile(MBRef));
-
-  if (Magic != file_magic::coff_object)
-    return make_dynamic_error_code("unknown file type");
-
-  StringRef Filename = MBRef.getBufferIdentifier();
-  auto FileOrErr = ObjectFile::create(Filename, MBRef);
-  if (auto EC = FileOrErr.getError())
-    return EC;
-  std::unique_ptr<ObjectFile> Obj = std::move(FileOrErr.get());
-  return addFile(std::move(Obj));
+  return addFile(std::move(File));
 }
 
 uint64_t Resolver::getRVA(StringRef Symbol) {

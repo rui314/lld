@@ -48,8 +48,29 @@ uint64_t DefinedImplib::getFileOff() {
   return AddressTable->FileOff;
 }
 
-ErrorOr<MemoryBufferRef> CanBeDefined::getMember() {
-  return File->getMember(&Sym);
+ErrorOr<std::unique_ptr<InputFile>> CanBeDefined::getMember() {
+  auto MBRefOrErr = File->getMember(&Sym);
+  if (auto EC = MBRefOrErr.getError())
+    return EC;
+  MemoryBufferRef MBRef = MBRefOrErr.get();
+
+  // getMember returns an empty buffer if the member was already
+  // read from the library.
+  if (MBRef.getBuffer().empty())
+    return nullptr;
+
+  file_magic Magic = identify_magic(StringRef(MBRef.getBuffer()));
+  if (Magic == file_magic::coff_import_library)
+    return llvm::make_unique<ImplibFile>(MBRef);
+
+  if (Magic != file_magic::coff_object)
+    return make_dynamic_error_code("unknown file type");
+
+  StringRef Filename = MBRef.getBufferIdentifier();
+  ErrorOr<std::unique_ptr<ObjectFile>> FileOrErr = ObjectFile::create(Filename, MBRef);
+  if (auto EC = FileOrErr.getError())
+    return EC;
+  return std::move(FileOrErr.get());
 }
 
 ErrorOr<std::unique_ptr<ArchiveFile>> ArchiveFile::create(StringRef Path) {
