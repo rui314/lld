@@ -38,7 +38,7 @@ private:
 
   std::vector<std::unique_ptr<ObjectFile>> ObjectFiles;
   std::vector<std::unique_ptr<ArchiveFile>> ArchiveFiles;
-  SymbolTable Symtab;
+  std::map<llvm::StringRef, SymbolRef *> Symtab;
 };
 
 } // namespace pecoff

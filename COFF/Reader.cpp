@@ -26,7 +26,7 @@ namespace coff {
 
 DefinedRegular::DefinedRegular(ObjectFile *F, StringRef N, COFFSymbolRef SymRef)
   : Defined(DefinedRegularKind), File(F), Name(N), Sym(SymRef),
-    Chunk(&File->Chunks[Sym.getSectionNumber() - 1]) {}
+    Chunk(File->Chunks[Sym.getSectionNumber() - 1]) {}
 
 bool DefinedRegular::isCOMDAT() const {
   return Chunk->isCOMDAT();
@@ -132,7 +132,7 @@ ObjectFile::ObjectFile(StringRef N, std::unique_ptr<COFFObjectFile> F)
 		   << EC.message() << "\n";
       return;
     }
-    Chunks.emplace_back(this, Sec);
+    Chunks.push_back(new SectionChunk(this, Sec));
   }
 }
 

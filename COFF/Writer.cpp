@@ -33,8 +33,8 @@ StringRef dropDollar(StringRef S) {
 void Writer::groupSections() {
   std::map<StringRef, std::vector<Chunk *>> Map;
   for (std::unique_ptr<ObjectFile> &File : Res->getFiles())
-    for (Chunk &C : File->Chunks)
-      Map[dropDollar(C.getSectionName())].push_back(&C);
+    for (Chunk *C : File->Chunks)
+      Map[dropDollar(C->getSectionName())].push_back(C);
 
   auto comp = [](Chunk *A, Chunk *B) {
     return A->getSectionName() < B->getSectionName();

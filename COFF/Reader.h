@@ -51,6 +51,7 @@ public:
   virtual size_t getSize() const = 0;
   virtual void applyRelocations(uint8_t *Buffer) = 0;
   virtual bool isBSS() const { return false; }
+  virtual bool isCOMDAT() const { return false; }
   virtual uint32_t getPermission() const { return 0; }
   virtual StringRef getSectionName() const { llvm_unreachable("not implemented"); }
 
@@ -78,7 +79,7 @@ public:
   size_t getSize() const override;
   void applyRelocations(uint8_t *Buffer) override;
   bool isBSS() const override;
-  bool isCOMDAT() const;
+  bool isCOMDAT() const override;
   uint32_t getPermission() const override;
   StringRef getSectionName() const override { return SectionName; }
 
@@ -183,7 +184,7 @@ private:
   ObjectFile *File;
   StringRef Name;
   COFFSymbolRef Sym;
-  SectionChunk *Chunk;
+  Chunk *Chunk;
 };
 
 class DefinedImportData : public Defined {
@@ -322,7 +323,7 @@ public:
 
   std::string Name;
   std::vector<SymbolRef *> Symbols;
-  std::vector<SectionChunk> Chunks;
+  std::vector<Chunk *> Chunks;
   std::unique_ptr<COFFObjectFile> COFFFile;
 
 private:
@@ -372,8 +373,6 @@ private:
   uint32_t SectionIndex;
   std::vector<Chunk *> Chunks;
 };
-
-typedef std::map<llvm::StringRef, SymbolRef *> SymbolTable;
 
 } // namespace coff
 } // namespace lld
