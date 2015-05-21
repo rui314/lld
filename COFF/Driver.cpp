@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Reader.h"
-#include "Resolver.h"
+#include "SymbolTable.h"
 #include "Writer.h"
 #include "lld/Core/Error.h"
 #include "llvm/ADT/ArrayRef.h"
@@ -133,7 +133,7 @@ bool link(int Argc, const char *Argv[]) {
     return true;
   }
 
-  Resolver Res;
+  SymbolTable Symtab;
   for (auto *Arg : Args->filtered(OPT_INPUT)) {
     std::string Path = findFile(Arg->getValue());
     ErrorOr<std::unique_ptr<InputFile>> FileOrErr = createFile(Path);
@@ -141,15 +141,15 @@ bool link(int Argc, const char *Argv[]) {
       llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";
       return false;
     }
-    if (auto EC = Res.addFile(std::move(FileOrErr.get()))) {
+    if (auto EC = Symtab.addFile(std::move(FileOrErr.get()))) {
       llvm::errs() << "addFile failed: " << Path << ": " << EC.message() << "\n";
       return false;
     }
   }
-  if (Res.reportRemainingUndefines())
+  if (Symtab.reportRemainingUndefines())
     return false;
 
-  Writer OutFile(&Res);
+  Writer OutFile(&Symtab);
   OutFile.write(getOutputPath(Args.get()));
   return true;
 }

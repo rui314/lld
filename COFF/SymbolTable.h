@@ -1,4 +1,4 @@
-//===- Resolver.h ---------------------------------------------------------===//
+//===- SymbolTable.h ------------------------------------------------------===//
 //
 //                             The LLVM Linker
 //
@@ -7,15 +7,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLD_COFF_RESOLVER_H
-#define LLD_COFF_RESOLVER_H
+#ifndef LLD_COFF_SYMBOL_TABLE_H
+#define LLD_COFF_SYMBOL_TABLE_H
 
 #include "Reader.h"
 
 namespace lld {
 namespace coff {
 
-class Resolver {
+class SymbolTable {
 public:
   std::error_code addFile(std::unique_ptr<InputFile> File);
   bool reportRemainingUndefines();

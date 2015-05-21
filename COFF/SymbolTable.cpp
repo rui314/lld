@@ -1,4 +1,4 @@
-//===- Resolver.cpp -------------------------------------------------------===//
+//===- SymbolTable.cpp ----------------------------------------------------===//
 //
 //                             The LLVM Linker
 //
@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Resolver.h"
+#include "SymbolTable.h"
 #include "lld/Core/Error.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/Debug.h"
@@ -16,7 +16,7 @@
 namespace lld {
 namespace coff {
 
-std::error_code Resolver::addFile(std::unique_ptr<InputFile> File) {
+std::error_code SymbolTable::addFile(std::unique_ptr<InputFile> File) {
   InputFile *P = File.release();
   if (auto *F = dyn_cast<ObjectFile>(P))
     return addFile(F);
@@ -27,7 +27,7 @@ std::error_code Resolver::addFile(std::unique_ptr<InputFile> File) {
   llvm_unreachable("unknown file type");
 }
 
-std::error_code Resolver::addFile(ObjectFile *File) {
+std::error_code SymbolTable::addFile(ObjectFile *File) {
   ObjectFiles.emplace_back(File);
   for (Symbol *Sym : File->getSymbols()) {
     if (Sym->isExternal()) {
@@ -43,7 +43,7 @@ std::error_code Resolver::addFile(ObjectFile *File) {
   return std::error_code();
 }
 
-std::error_code Resolver::addFile(ArchiveFile *File) {
+std::error_code SymbolTable::addFile(ArchiveFile *File) {
   ArchiveFiles.emplace_back(File);
   for (Symbol *Sym : File->getSymbols())
     if (auto EC = resolve(Sym))
@@ -51,7 +51,7 @@ std::error_code Resolver::addFile(ArchiveFile *File) {
   return std::error_code();
 }
 
-std::error_code Resolver::addFile(ImplibFile *File) {
+std::error_code SymbolTable::addFile(ImplibFile *File) {
   ImplibFiles.emplace_back(File);
   for (Symbol *Sym : File->getSymbols())
     if (auto EC = resolve(Sym))
@@ -59,7 +59,7 @@ std::error_code Resolver::addFile(ImplibFile *File) {
   return std::error_code();
 }
 
-bool Resolver::reportRemainingUndefines() {
+bool SymbolTable::reportRemainingUndefines() {
   for (auto &I : Symtab) {
     SymbolRef *Ref = I.second;
     if (!dyn_cast<Undefined>(Ref->Ptr))
@@ -99,7 +99,7 @@ bool Resolver::reportRemainingUndefines() {
 // [Defined Defined]
 // Resolve them according to COMDAT values if both are COMDAT symbols.
 // It's an error if they are not COMDAT.
-std::error_code Resolver::resolve(Symbol *Sym) {
+std::error_code SymbolTable::resolve(Symbol *Sym) {
   StringRef Name = Sym->getName();
   if (Symtab.count(Name) == 0)
     Symtab[Name] = new SymbolRef();
@@ -144,7 +144,7 @@ std::error_code Resolver::resolve(Symbol *Sym) {
   return make_dynamic_error_code(Twine("duplicate symbol: ") + Ref->Ptr->getName());
 }
 
-std::error_code Resolver::addMemberFile(CanBeDefined *Sym) {
+std::error_code SymbolTable::addMemberFile(CanBeDefined *Sym) {
   auto FileOrErr = Sym->getMember();
   if (auto EC = FileOrErr.getError())
     return EC;
@@ -157,7 +157,7 @@ std::error_code Resolver::addMemberFile(CanBeDefined *Sym) {
   return addFile(std::move(File));
 }
 
-uint64_t Resolver::getRVA(StringRef Symbol) {
+uint64_t SymbolTable::getRVA(StringRef Symbol) {
   auto It = Symtab.find(Symbol);
   if (It == Symtab.end())
     return 0;

@@ -32,7 +32,7 @@ StringRef dropDollar(StringRef S) {
 
 void Writer::groupSections() {
   std::map<StringRef, std::vector<Chunk *>> Map;
-  for (std::unique_ptr<ObjectFile> &File : Res->getFiles())
+  for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
     for (Chunk *C : File->Chunks)
       Map[dropDollar(C->getSectionName())].push_back(C);
 
@@ -58,7 +58,7 @@ void Writer::groupSections() {
 std::map<StringRef, std::vector<DefinedImportData *>> Writer::groupImports() {
   std::map<StringRef, std::vector<DefinedImportData *>> Ret;
   OutputSection *Text = createSection(".text");
-  for (std::unique_ptr<ImplibFile> &P : Res->ImplibFiles) {
+  for (std::unique_ptr<ImplibFile> &P : Symtab->ImplibFiles) {
     for (Symbol *S : P->getSymbols()) {
       if (auto *Sym = dyn_cast<DefinedImportData>(S)) {
 	Ret[Sym->getDLLName()].push_back(Sym);
@@ -80,7 +80,7 @@ std::map<StringRef, std::vector<DefinedImportData *>> Writer::groupImports() {
 }
 
 void Writer::createImportTables() {
-  if (Res->ImplibFiles.empty())
+  if (Symtab->ImplibFiles.empty())
     return;
 
   std::vector<ImportTable *> Tabs;
@@ -228,7 +228,7 @@ void Writer::writeSections() {
 }
 
 void Writer::backfillHeaders() {
-  PE->AddressOfEntryPoint = Res->getRVA("main");
+  PE->AddressOfEntryPoint = Symtab->getRVA("main");
   if (OutputSection *Text = findSection(".text")) {
     PE->BaseOfCode = Text->getRVA();
     PE->SizeOfCode = Text->getRawSize();

@@ -11,7 +11,7 @@
 #define LLD_COFF_WRITER_H
 
 #include "Reader.h"
-#include "Resolver.h"
+#include "SymbolTable.h"
 #include "llvm/Support/FileOutputBuffer.h"
 #include <memory>
 #include <vector>
@@ -28,7 +28,7 @@ const int HeaderSize = DOSStubSize + sizeof(llvm::COFF::PEMagic)
 
 class Writer {
 public:
-  explicit Writer(Resolver *R) : Res(R) {}
+  explicit Writer(SymbolTable *T) : Symtab(T) {}
   void write(StringRef Path);
 
 private:
@@ -41,11 +41,11 @@ private:
   void writeSections();
   void applyRelocations();
   void backfillHeaders();
-  OutputSection *findSection(StringRef name);
-  OutputSection *createSection(StringRef name);
+  OutputSection *findSection(StringRef Name);
+  OutputSection *createSection(StringRef Name);
   std::map<StringRef, std::vector<DefinedImportData *>> groupImports();
 
-  Resolver *Res;
+  SymbolTable *Symtab;
   std::unique_ptr<llvm::FileOutputBuffer> Buffer;
   llvm::object::coff_file_header *COFF;
   llvm::object::pe32plus_header *PE;
