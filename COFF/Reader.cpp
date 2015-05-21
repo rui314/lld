@@ -88,12 +88,12 @@ ErrorOr<std::unique_ptr<ArchiveFile>> ArchiveFile::create(StringRef Path) {
     new ArchiveFile(Path, std::move(File), std::move(MB)));
 }
 
-std::vector<Symbol *> ArchiveFile::getSymbols() {
-  std::vector<Symbol *> Ret;
+ArchiveFile::ArchiveFile(StringRef N, std::unique_ptr<Archive> F,
+                         std::unique_ptr<MemoryBuffer> M)
+    : InputFile(ArchiveKind), Name(N), File(std::move(F)), MB(std::move(M)) {
   for (const Archive::Symbol &Sym : File->symbols())
     if (Sym.getName() != "__NULL_IMPORT_DESCRIPTOR")
-      Ret.push_back(new CanBeDefined(this, Sym));
-  return Ret;
+      Symbols.push_back(llvm::make_unique<CanBeDefined>(this, Sym));
 }
 
 ErrorOr<MemoryBufferRef>
@@ -132,6 +132,11 @@ ErrorOr<std::unique_ptr<ObjectFile>> ObjectFile::create(StringRef Path) {
 
 ObjectFile::ObjectFile(StringRef N, std::unique_ptr<COFFObjectFile> F)
     : InputFile(ObjectKind), Name(N), COFFFile(std::move(F)) {
+  initializeChunks();
+  initializeSymbols();
+}
+
+void ObjectFile::initializeChunks() {
   uint32_t NumSections = COFFFile->getNumberOfSections();
   Chunks.resize(NumSections + 1);
   for (uint32_t I = 1; I < NumSections + 1; ++I) {
@@ -157,25 +162,10 @@ ObjectFile::ObjectFile(StringRef N, std::unique_ptr<COFFObjectFile> F)
   }
 }
 
-ErrorOr<std::unique_ptr<ObjectFile>>
-ObjectFile::create(StringRef Path, MemoryBufferRef MBRef) {
-  auto BinOrErr = createBinary(MBRef);
-  if (auto EC = BinOrErr.getError())
-    return EC;
-  std::unique_ptr<Binary> Bin = std::move(BinOrErr.get());
-
-  if (!isa<COFFObjectFile>(Bin.get()))
-    return lld::make_dynamic_error_code(Twine(Path) + " is not a COFF file.");
-  std::unique_ptr<COFFObjectFile> Obj(static_cast<COFFObjectFile *>(Bin.release()));
-  auto File = std::unique_ptr<ObjectFile>(new ObjectFile(Path, std::move(Obj)));
-
-  File->Symbols.resize(File->COFFFile->getNumberOfSymbols());
-  return std::move(File);
-}
-
-std::vector<Symbol *> ObjectFile::getSymbols() {
-  std::vector<Symbol *> Ret;
-  for (uint32_t I = 0, E = COFFFile->getNumberOfSymbols(); I < E; ++I) {
+void ObjectFile::initializeSymbols() {
+  uint32_t NumSymbols = COFFFile->getNumberOfSymbols();
+  SymbolRefs.resize(NumSymbols);
+  for (uint32_t I = 0; I < NumSymbols; ++I) {
     // Get a COFFSymbolRef object.
     auto SrefOrErr = COFFFile->getSymbol(I);
     if (auto EC = SrefOrErr.getError()) {
@@ -191,26 +181,39 @@ std::vector<Symbol *> ObjectFile::getSymbols() {
       break;
     }
 
-    Symbol *P = nullptr;
+    std::unique_ptr<Symbol> Sym;
     if (Sref.isUndefined()) {
-      P = new Undefined(SymbolName);
+      Sym.reset(new Undefined(SymbolName));
     } else if (Sref.isCommon()) {
       Chunk *C = new CommonChunk(Sref);
       Chunks.push_back(C);
-      P = new DefinedRegular(this, SymbolName, Sref, C);
+      Sym.reset(new DefinedRegular(this, SymbolName, Sref, C));
     } else if (Sref.getSectionNumber() == -1) {
       // absolute symbol
     } else {
       if (Chunk *C = Chunks[Sref.getSectionNumber()])
-        P = new DefinedRegular(this, SymbolName, Sref, C);
+        Sym.reset(new DefinedRegular(this, SymbolName, Sref, C));
     }
-    if (P) {
-      P->setSymbolRefAddress(&Symbols[I]);
-      Ret.push_back(P);
+    if (Sym) {
+      Sym->setSymbolRefAddress(&SymbolRefs[I]);
+      Symbols.push_back(std::move(Sym));
     }
     I += Sref.getNumberOfAuxSymbols();
   }
-  return Ret;
+}
+
+ErrorOr<std::unique_ptr<ObjectFile>>
+ObjectFile::create(StringRef Path, MemoryBufferRef MBRef) {
+  auto BinOrErr = createBinary(MBRef);
+  if (auto EC = BinOrErr.getError())
+    return EC;
+  std::unique_ptr<Binary> Bin = std::move(BinOrErr.get());
+
+  if (!isa<COFFObjectFile>(Bin.get()))
+    return lld::make_dynamic_error_code(Twine(Path) + " is not a COFF file.");
+  std::unique_ptr<COFFObjectFile> Obj(static_cast<COFFObjectFile *>(Bin.release()));
+  auto File = std::unique_ptr<ObjectFile>(new ObjectFile(Path, std::move(Obj)));
+  return std::move(File);
 }
 
 StringRef ImplibFile::getName() {
@@ -239,12 +242,12 @@ void ImplibFile::readImplib() {
   StringRef ImpName = Alloc.save(Twine("__imp_") + Name);
   StringRef DLLName(Buf + sizeof(ImportHeader) + Name.size() + 1);
   auto *ImpSym = new DefinedImportData(DLLName, ImpName, Name);
-  Symbols.push_back(ImpSym);
+  Symbols.push_back(std::unique_ptr<DefinedImportData>(ImpSym));
 
   uint16_t TypeInfo = read16le(Buf + offsetof(ImportHeader, TypeInfo));
   int Type = TypeInfo & 0x3;
   if (Type == llvm::COFF::IMPORT_CODE)
-    Symbols.push_back(new DefinedImportFunc(Name, ImpSym));
+    Symbols.push_back(llvm::make_unique<DefinedImportFunc>(Name, ImpSym));
 }
 
 SectionChunk::SectionChunk(ObjectFile *F, const coff_section *H)
@@ -279,7 +282,7 @@ void SectionChunk::applyRelocation(uint8_t *Buffer, const coff_relocation *Rel) 
   using namespace llvm::COFF;
 
   uint8_t *Off = Buffer + getFileOff() + Rel->VirtualAddress;
-  auto *Sym = cast<Defined>(File->Symbols[Rel->SymbolTableIndex]->Ptr);
+  auto *Sym = cast<Defined>(File->SymbolRefs[Rel->SymbolTableIndex]->Ptr);
   uint64_t S = Sym->getRVA();
   uint64_t P = getRVA() + Rel->VirtualAddress;
   if (Rel->Type == IMAGE_REL_AMD64_ADDR32) {

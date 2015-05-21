@@ -36,15 +36,15 @@ std::error_code SymbolTable::addFile(std::unique_ptr<InputFile> File) {
 
 std::error_code SymbolTable::addFile(ObjectFile *File) {
   ObjectFiles.emplace_back(File);
-  for (Symbol *Sym : File->getSymbols()) {
+  for (std::unique_ptr<Symbol> &Sym : File->getSymbols()) {
     if (Sym->isExternal()) {
       // Only externally-visible symbols are subjects of symbol
       // resolution.
-      if (auto EC = resolve(Sym))
+      if (auto EC = resolve(Sym.get()))
         return EC;
       Sym->setSymbolRef(Symtab[Sym->getName()]);
     } else {
-      Sym->setSymbolRef(new SymbolRef(Sym));
+      Sym->setSymbolRef(new SymbolRef(Sym.get()));
     }
   }
 
@@ -62,16 +62,16 @@ std::error_code SymbolTable::addFile(ObjectFile *File) {
 
 std::error_code SymbolTable::addFile(ArchiveFile *File) {
   ArchiveFiles.emplace_back(File);
-  for (Symbol *Sym : File->getSymbols())
-    if (auto EC = resolve(Sym))
+  for (std::unique_ptr<Symbol> &Sym : File->getSymbols())
+    if (auto EC = resolve(Sym.get()))
       return EC;
   return std::error_code();
 }
 
 std::error_code SymbolTable::addFile(ImplibFile *File) {
   ImplibFiles.emplace_back(File);
-  for (Symbol *Sym : File->getSymbols())
-    if (auto EC = resolve(Sym))
+  for (std::unique_ptr<Symbol> &Sym : File->getSymbols())
+    if (auto EC = resolve(Sym.get()))
       return EC;
   return std::error_code();
 }

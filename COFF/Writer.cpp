@@ -60,12 +60,12 @@ std::map<StringRef, std::vector<DefinedImportData *>> Writer::groupImports() {
   std::map<StringRef, std::vector<DefinedImportData *>> Ret;
   OutputSection *Text = createSection(".text");
   for (std::unique_ptr<ImplibFile> &P : Symtab->ImplibFiles) {
-    for (Symbol *S : P->getSymbols()) {
-      if (auto *Sym = dyn_cast<DefinedImportData>(S)) {
+    for (std::unique_ptr<Symbol> &S : P->getSymbols()) {
+      if (auto *Sym = dyn_cast<DefinedImportData>(S.get())) {
         Ret[Sym->getDLLName()].push_back(Sym);
         continue;
       }
-      Text->addChunk(cast<DefinedImportFunc>(S)->getChunk());
+      Text->addChunk(cast<DefinedImportFunc>(S.get())->getChunk());
     }
   }
 

@@ -302,7 +302,7 @@ public:
   virtual ~InputFile() {}
 
   virtual StringRef getName() = 0;
-  virtual std::vector<Symbol *> getSymbols() = 0;
+  virtual std::vector<std::unique_ptr<Symbol>> &getSymbols() = 0;
 
 protected:
   InputFile(Kind K) : FileKind(K) {}
@@ -318,7 +318,7 @@ public:
   static ErrorOr<std::unique_ptr<ArchiveFile>> create(StringRef Path);
 
   StringRef getName() override { return Name; }
-  std::vector<Symbol *> getSymbols() override;
+  std::vector<std::unique_ptr<Symbol>> &getSymbols() override { return Symbols; }
 
   std::string Name;
   std::unique_ptr<Archive> File;
@@ -326,11 +326,11 @@ public:
   ErrorOr<MemoryBufferRef> getMember(const Archive::Symbol *Sym);
 
 private:
-  ArchiveFile(StringRef N, std::unique_ptr<Archive> F,
-              std::unique_ptr<MemoryBuffer> M)
-    : InputFile(ArchiveKind), Name(N), File(std::move(F)), MB(std::move(M)) {}
+  ArchiveFile(StringRef Name, std::unique_ptr<Archive> File,
+              std::unique_ptr<MemoryBuffer> Mem);
 
   std::unique_ptr<MemoryBuffer> MB;
+  std::vector<std::unique_ptr<Symbol>> Symbols;
   std::set<const char *> Seen;
 };
 
@@ -343,16 +343,19 @@ public:
     create(StringRef Path, MemoryBufferRef MB);
 
   StringRef getName() override { return Name; }
-  std::vector<Symbol *> getSymbols() override;
+  std::vector<std::unique_ptr<Symbol>> &getSymbols() override { return Symbols; }
   StringRef getDirectives() { return Directives; }
 
   std::string Name;
-  std::vector<SymbolRef *> Symbols;
+  std::vector<std::unique_ptr<Symbol>> Symbols;
+  std::vector<SymbolRef *> SymbolRefs;
   std::vector<Chunk *> Chunks;
   std::unique_ptr<COFFObjectFile> COFFFile;
 
 private:
   ObjectFile(StringRef Name, std::unique_ptr<COFFObjectFile> File);
+  void initializeChunks();
+  void initializeSymbols();
 
   std::unique_ptr<MemoryBuffer> MB;
   StringRef Directives;
@@ -365,13 +368,13 @@ public:
   static bool classof(const InputFile *F) { return F->kind() == ImplibKind; }
 
   StringRef getName() override;
-  std::vector<Symbol *> getSymbols() override { return Symbols; }
+  std::vector<std::unique_ptr<Symbol>> &getSymbols() override { return Symbols; }
 
 private:
   void readImplib();
 
   MemoryBufferRef MBRef;
-  std::vector<Symbol *> Symbols;
+  std::vector<std::unique_ptr<Symbol>> Symbols;
   StringAllocator Alloc;
 };
 
