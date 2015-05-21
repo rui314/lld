@@ -349,7 +349,7 @@ public:
   std::string Name;
   std::vector<std::unique_ptr<Symbol>> Symbols;
   std::vector<SymbolRef *> SymbolRefs;
-  std::vector<Chunk *> Chunks;
+  std::vector<std::unique_ptr<Chunk>> Chunks;
   std::unique_ptr<COFFObjectFile> COFFFile;
 
 private:

@@ -158,7 +158,7 @@ void ObjectFile::initializeChunks() {
       Directives = StringRef((char *)Data.data(), Data.size()).trim();
       continue;
     }
-    Chunks[I] = new SectionChunk(this, Sec);
+    Chunks[I].reset(new SectionChunk(this, Sec));
   }
 }
 
@@ -186,13 +186,13 @@ void ObjectFile::initializeSymbols() {
       Sym.reset(new Undefined(SymbolName));
     } else if (Sref.isCommon()) {
       Chunk *C = new CommonChunk(Sref);
-      Chunks.push_back(C);
+      Chunks.push_back(std::unique_ptr<Chunk>(C));
       Sym.reset(new DefinedRegular(this, SymbolName, Sref, C));
     } else if (Sref.getSectionNumber() == -1) {
       // absolute symbol
     } else {
-      if (Chunk *C = Chunks[Sref.getSectionNumber()])
-        Sym.reset(new DefinedRegular(this, SymbolName, Sref, C));
+      if (std::unique_ptr<Chunk> &C = Chunks[Sref.getSectionNumber()])
+        Sym.reset(new DefinedRegular(this, SymbolName, Sref, C.get()));
     }
     if (Sym) {
       Sym->setSymbolRefAddress(&SymbolRefs[I]);

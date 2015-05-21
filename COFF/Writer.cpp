@@ -33,9 +33,9 @@ StringRef dropDollar(StringRef S) {
 void Writer::groupSections() {
   std::map<StringRef, std::vector<Chunk *>> Map;
   for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
-    for (Chunk *C : File->Chunks)
+    for (std::unique_ptr<Chunk> &C : File->Chunks)
       if (C)
-        Map[dropDollar(C->getSectionName())].push_back(C);
+        Map[dropDollar(C->getSectionName())].push_back(C.get());
 
   auto comp = [](Chunk *A, Chunk *B) {
     return A->getSectionName() < B->getSectionName();
