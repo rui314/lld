@@ -15,6 +15,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Object/Archive.h"
 #include "llvm/Object/COFF.h"
+#include "llvm/Support/Compiler.h"
 #include "llvm/Support/FileUtilities.h"
 #include <map>
 #include <memory>
@@ -46,6 +47,10 @@ class ObjectFile;
 class OutputSection;
 struct SymbolRef;
 
+LLVM_ATTRIBUTE_NORETURN inline void unimplemented() {
+  llvm_unreachable("internal error");
+}
+
 class Chunk {
 public:
   ~Chunk() {}
@@ -57,7 +62,7 @@ public:
   virtual bool isCOMDAT() const { return false; }
   virtual bool isCommon() const { return false; }
   virtual uint32_t getPermission() const { return 0; }
-  virtual StringRef getSectionName() const { llvm_unreachable("not implemented"); }
+  virtual StringRef getSectionName() const { unimplemented(); }
 
   uint64_t getRVA() { return RVA; }
   uint64_t getFileOff() { return FileOff; }
@@ -99,7 +104,7 @@ private:
 class CommonChunk : public Chunk {
 public:
   CommonChunk(const COFFSymbolRef S) : Sym(S) {}
-  const uint8_t *getData() const override;
+  const uint8_t *getData() const override { unimplemented(); }
   size_t getSize() const override;
   void applyRelocations(uint8_t *Buffer) override {}
   bool isBSS() const override { return true; }
@@ -220,7 +225,7 @@ public:
   }
 
   uint64_t getRVA() override { return RVA; }
-  uint64_t getFileOff() override { llvm_unreachable("not implemented"); }
+  uint64_t getFileOff() override { unimplemented(); }
 
 private:
   uint64_t RVA;

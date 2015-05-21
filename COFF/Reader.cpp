@@ -328,10 +328,6 @@ bool SectionChunk::isCOMDAT() const {
   return Header->Characteristics & llvm::COFF::IMAGE_SCN_LNK_COMDAT;
 }
 
-const uint8_t *CommonChunk::getData() const {
-  llvm_unreachable("not implemented");
-}
-
 size_t CommonChunk::getSize() const {
   return Sym.getValue();
 }
