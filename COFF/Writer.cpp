@@ -26,29 +26,32 @@ using namespace llvm::object;
 namespace lld {
 namespace coff {
 
-void Writer::groupSections() {
-  std::map<StringRef, std::vector<InputSection *>> Map;
-  for (std::unique_ptr<ObjectFile> &File : Res->getFiles())
-    for (InputSection &Sec : File->Sections)
-      Map[Sec.getNameDropDollar()].push_back(&Sec);
+StringRef dropDollar(StringRef S) {
+  return S.substr(0, S.find('$'));
+}
 
-  auto comp = [](InputSection *A, InputSection *B) {
-    return A->getName() < B->getName();
+void Writer::groupSections() {
+  std::map<StringRef, std::vector<Chunk *>> Map;
+  for (std::unique_ptr<ObjectFile> &File : Res->getFiles())
+    for (Chunk &C : File->Chunks)
+      Map[dropDollar(C.getSectionName())].push_back(&C);
+
+  auto comp = [](Chunk *A, Chunk *B) {
+    return A->getSectionName() < B->getSectionName();
   };
 
   for (auto &P : Map) {
     StringRef SectionName = P.first;
-    std::vector<InputSection *> &InputSections = P.second;
-    std::stable_sort(InputSections.begin(), InputSections.end(), comp);
-    std::unique_ptr<OutputSection> OSec(
+    std::vector<Chunk *> &Chunks = P.second;
+    std::stable_sort(Chunks.begin(), Chunks.end(), comp);
+    std::unique_ptr<OutputSection> Sec(
       new OutputSection(SectionName, OutputSections.size()));
-    for (InputSection *ISec : InputSections) {
-      Chunk *C = ISec->getChunk();
-      C->setOutputSection(OSec.get());
-      OSec->addChunk(C);
-      OSec->addPermission(C->getPermission());
+    for (Chunk *C : Chunks) {
+      C->setOutputSection(Sec.get());
+      Sec->addChunk(C);
+      Sec->addPermission(C->getPermission());
     }
-    OutputSections.push_back(std::move(OSec));
+    OutputSections.push_back(std::move(Sec));
   }
 }
 

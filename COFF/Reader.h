@@ -36,7 +36,6 @@ const uint32_t PermMask = 0xF00000F0;
 class ArchiveFile;
 class Chunk;
 class InputFile;
-class InputSection;
 class ObjectFile;
 class OutputSection;
 class Defined;
@@ -49,6 +48,7 @@ public:
   virtual void applyRelocations(uint8_t *Buffer) = 0;
   virtual bool isBSS() const { return false; }
   virtual uint32_t getPermission() const { return 0; }
+  virtual StringRef getSectionName() const { return ""; }
 
   uint64_t getRVA() { return RVA; }
   uint64_t getFileOff() { return FileOff; }
@@ -76,12 +76,14 @@ public:
   bool isBSS() const override;
   bool isCOMDAT() const;
   uint32_t getPermission() const override;
+  StringRef getSectionName() const override { return SectionName; }
 
 private:
   void applyRelocation(uint8_t *Buffer, const coff_relocation *Rel);
 
   ObjectFile *File;
   const coff_section *Header;
+  StringRef SectionName;
   ArrayRef<uint8_t> Data;
 };
 
@@ -314,16 +316,13 @@ public:
   StringRef getName() override { return Name; }
   std::vector<Symbol *> getSymbols() override;
 
-  std::error_code initSections();
-
   std::string Name;
   std::vector<SymbolRef *> Symbols;
-  std::vector<InputSection> Sections;
+  std::vector<SectionChunk> Chunks;
   std::unique_ptr<COFFObjectFile> COFFFile;
 
 private:
-  ObjectFile(StringRef N, std::unique_ptr<COFFObjectFile> F)
-    : InputFile(ObjectKind), Name(N), COFFFile(std::move(F)) {}
+  ObjectFile(StringRef Name, std::unique_ptr<COFFObjectFile> File);
 
   std::unique_ptr<MemoryBuffer> MB;
 };
@@ -342,24 +341,6 @@ private:
 
   MemoryBufferRef MBRef;
   std::vector<Symbol *> Symbols;
-};
-
-class InputSection {
-public:
-  InputSection(ObjectFile *F, const coff_section *H)
-      : File(F), Header(H), Chunk(F, H) {
-    F->COFFFile->getSectionName(H, Name);
-  }
-
-  StringRef getName() { return Name; }
-  StringRef getNameDropDollar() { return Name.substr(0, Name.find('$')); }
-  SectionChunk *getChunk() { return &Chunk; }
-
-private:
-  const coff_section *Header;
-  ObjectFile *File;
-  SectionChunk Chunk;
-  StringRef Name;
 };
 
 class OutputSection {

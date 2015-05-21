@@ -26,7 +26,7 @@ namespace coff {
 
 DefinedRegular::DefinedRegular(ObjectFile *F, StringRef N, COFFSymbolRef SymRef)
   : Defined(DefinedRegularKind), File(F), Name(N), Sym(SymRef),
-    Chunk(File->Sections[Sym.getSectionNumber() - 1].getChunk()) {}
+    Chunk(&File->Chunks[Sym.getSectionNumber() - 1]) {}
 
 bool DefinedRegular::isCOMDAT() const {
   return Chunk->isCOMDAT();
@@ -121,6 +121,20 @@ ErrorOr<std::unique_ptr<ObjectFile>> ObjectFile::create(StringRef Path) {
   return std::move(File);
 }
 
+ObjectFile::ObjectFile(StringRef N, std::unique_ptr<COFFObjectFile> F)
+    : InputFile(ObjectKind), Name(N), COFFFile(std::move(F)) {
+  uint32_t NumSections = COFFFile->getNumberOfSections();
+  for (uint32_t I = 1; I < NumSections + 1; ++I) {
+    const coff_section *Sec;
+    if (auto EC = COFFFile->getSection(I, Sec)) {
+      llvm::errs() << "getSection failed: " << Name << ": "
+		   << EC.message() << "\n";
+      return;
+    }
+    Chunks.emplace_back(this, Sec);
+  }
+}
+
 ErrorOr<std::unique_ptr<ObjectFile>>
 ObjectFile::create(StringRef Path, MemoryBufferRef MBRef) {
   auto BinOrErr = createBinary(MBRef);
@@ -133,8 +147,6 @@ ObjectFile::create(StringRef Path, MemoryBufferRef MBRef) {
   std::unique_ptr<COFFObjectFile> Obj(static_cast<COFFObjectFile *>(Bin.release()));
   auto File = std::unique_ptr<ObjectFile>(new ObjectFile(Path, std::move(Obj)));
 
-  if (auto EC = File->initSections())
-    return EC;
   File->Symbols.resize(File->COFFFile->getNumberOfSymbols());
   return std::move(File);
 }
@@ -174,19 +186,6 @@ std::vector<Symbol *> ObjectFile::getSymbols() {
   return Ret;
 }
 
-std::error_code ObjectFile::initSections() {
-  COFFObjectFile *Obj = COFFFile.get();
-  uint32_t NumSections = Obj->getNumberOfSections();
-  Sections.reserve(NumSections);
-  for (uint32_t I = 1; I < NumSections + 1; ++I) {
-    const coff_section *Sec;
-    if (auto EC = Obj->getSection(I, Sec))
-      return EC;
-    Sections.emplace_back(this, Sec);
-  }
-  return std::error_code();
-}
-
 StringRef ImplibFile::getName() {
   return MBRef.getBufferIdentifier();
 }
@@ -222,6 +221,7 @@ void ImplibFile::readImplib() {
 
 SectionChunk::SectionChunk(ObjectFile *F, const coff_section *H)
     : File(F), Header(H) {
+  File->COFFFile->getSectionName(Header, SectionName);
   if (!isBSS())
     File->COFFFile->getSectionContents(Header, Data);
   unsigned Shift = ((Header->Characteristics & 0x00F00000) >> 20) - 1;
