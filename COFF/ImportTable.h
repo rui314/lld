@@ -62,7 +62,7 @@ private:
 
 class DirectoryChunk : public Chunk {
 public:
-  DirectoryChunk(StringRef N) : Name(N) {}
+  DirectoryChunk(StringChunk *N) : DLLName(N) {}
 
   const uint8_t *getData() const override {
     return reinterpret_cast<const uint8_t *>(&Ent);
@@ -73,11 +73,11 @@ public:
   void applyRelocations(uint8_t *Buffer) override {
     auto *E = reinterpret_cast<llvm::COFF::ImportDirectoryTableEntry *>(Buffer + getFileOff());
     E->ImportLookupTableRVA = LookupTab->getRVA();
-    E->NameRVA = Name.getRVA();
+    E->NameRVA = DLLName->getRVA();
     E->ImportAddressTableRVA = AddressTab->getRVA();
   }
 
-  StringChunk Name;
+  StringChunk *DLLName;
   LookupChunk *LookupTab;
   LookupChunk *AddressTab;
 
@@ -99,27 +99,29 @@ private:
 
 class ImportTable {
 public:
-  ImportTable(StringRef DLLName, std::vector<DefinedImportData *> &Symbols)
-      : DirTab(DLLName) {
+  ImportTable(StringRef N, std::vector<DefinedImportData *> &Symbols) {
+    DLLName = new StringChunk(N);
+    DirTab = new DirectoryChunk(DLLName);
     for (DefinedImportData *S : Symbols)
-      HintNameTables.emplace_back(S->getExportName());
+      HintNameTables.push_back(new HintNameChunk(S->getExportName()));
     
-    for (HintNameChunk &H : HintNameTables) {
-      LookupTables.emplace_back(&H);
-      AddressTables.emplace_back(&H);
+    for (HintNameChunk *H : HintNameTables) {
+      LookupTables.push_back(new LookupChunk(H));
+      AddressTables.push_back(new LookupChunk(H));
     }
 
     for (int I = 0, E = Symbols.size(); I < E; ++I)
-      Symbols[I]->setLocation(&AddressTables[I]);
+      Symbols[I]->setLocation(AddressTables[I]);
 
-    DirTab.LookupTab = &LookupTables[0];
-    DirTab.AddressTab = &AddressTables[0];
+    DirTab->LookupTab = LookupTables[0];
+    DirTab->AddressTab = AddressTables[0];
   }
 
-  DirectoryChunk DirTab;
-  std::vector<LookupChunk> LookupTables;
-  std::vector<LookupChunk> AddressTables;
-  std::vector<HintNameChunk> HintNameTables;
+  StringChunk *DLLName;
+  DirectoryChunk *DirTab;
+  std::vector<LookupChunk *> LookupTables;
+  std::vector<LookupChunk *> AddressTables;
+  std::vector<HintNameChunk *> HintNameTables;
 };
 
 } // namespace coff

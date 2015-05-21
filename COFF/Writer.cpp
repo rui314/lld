@@ -45,8 +45,7 @@ void Writer::groupSections() {
     StringRef SectionName = P.first;
     std::vector<Chunk *> &Chunks = P.second;
     std::stable_sort(Chunks.begin(), Chunks.end(), comp);
-    std::unique_ptr<OutputSection> Sec(
-      new OutputSection(SectionName, OutputSections.size()));
+    auto Sec = llvm::make_unique<OutputSection>(SectionName, OutputSections.size());
     for (Chunk *C : Chunks) {
       C->setOutputSection(Sec.get());
       Sec->addChunk(C);
@@ -84,44 +83,48 @@ void Writer::createImportTables() {
   if (Symtab->ImplibFiles.empty())
     return;
 
-  std::vector<ImportTable *> Tabs;
+  std::vector<ImportTable> Tabs;
   for (auto &P : groupImports()) {
     StringRef DLLName = P.first;
     std::vector<DefinedImportData *> &Imports = P.second;
-    Tabs.push_back(new ImportTable(DLLName, Imports));
+    Tabs.emplace_back(DLLName, Imports);
   }
   OutputSection *Idata = createSection(".idata");
+  size_t NumChunks = Idata->getChunks().size();
 
   // Add the directory tables.
-  for (ImportTable *T : Tabs)
-    Idata->addChunk(&T->DirTab);
+  for (ImportTable &T : Tabs)
+    Idata->addChunk(T.DirTab);
   Idata->addChunk(new NullChunk(sizeof(llvm::COFF::ImportDirectoryTableEntry)));
 
   // Add the import lookup tables.
-  for (ImportTable *T : Tabs) {
-    for (LookupChunk &C : T->LookupTables)
-      Idata->addChunk(&C);
+  for (ImportTable &T : Tabs) {
+    for (LookupChunk *C : T.LookupTables)
+      Idata->addChunk(C);
     Idata->addChunk(new NullChunk(8));
   }
 
   // Add the import address tables. Their contents are the same as the
   // lookup tables.
-  for (ImportTable *T : Tabs) {
-    for (LookupChunk &C : T->AddressTables)
-      Idata->addChunk(&C);
+  for (ImportTable &T : Tabs) {
+    for (LookupChunk *C : T.AddressTables)
+      Idata->addChunk(C);
     Idata->addChunk(new NullChunk(8));
   }
-
-  IAT = &Tabs[0]->AddressTables[0];
+  IAT = Tabs[0].AddressTables[0];
 
   // Add the hint name table.
-  for (ImportTable *T : Tabs)
-    for (HintNameChunk &C : T->HintNameTables)
-      Idata->addChunk(&C);
+  for (ImportTable &T : Tabs)
+    for (HintNameChunk *C : T.HintNameTables)
+      Idata->addChunk(C);
 
   // Add DLL names.
-  for (ImportTable *T : Tabs)
-    Idata->addChunk(&T->DirTab.Name);
+  for (ImportTable &T : Tabs)
+    Idata->addChunk(T.DLLName);
+
+  // Claim ownership.
+  for (size_t I = NumChunks, E = Idata->getChunks().size(); I < E; ++I)
+    Chunks.push_back(std::unique_ptr<Chunk>(Idata->getChunks()[I]));
 }
 
 void Writer::removeEmptySections() {
@@ -272,7 +275,7 @@ OutputSection *Writer::createSection(StringRef Name) {
   } else {
     llvm_unreachable("unknown section name");
   }
-  auto *S = new OutputSection(Name, OutputSections.size());
+  auto S = new OutputSection(Name, OutputSections.size());
   S->addPermission(Perm);
   OutputSections.push_back(std::unique_ptr<OutputSection>(S));
   return S;

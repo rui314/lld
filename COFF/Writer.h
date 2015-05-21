@@ -12,6 +12,7 @@
 
 #include "Reader.h"
 #include "SymbolTable.h"
+#include "llvm/Support/Allocator.h"
 #include "llvm/Support/FileOutputBuffer.h"
 #include <memory>
 #include <vector>
@@ -57,6 +58,8 @@ private:
   uint64_t EndOfSectionTable;
   uint64_t SectionTotalSizeDisk;
   uint64_t SectionTotalSizeMemory;
+
+  std::vector<std::unique_ptr<Chunk>> Chunks;
 };
 
 } // namespace pecoff
