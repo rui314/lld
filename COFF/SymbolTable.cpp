@@ -40,9 +40,10 @@ std::error_code SymbolTable::addFile(ObjectFile *File) {
     if (Sym->isExternal()) {
       // Only externally-visible symbols are subjects of symbol
       // resolution.
-      if (auto EC = resolve(Sym.get()))
+      SymbolRef *Ref;
+      if (auto EC = resolve(Sym.get(), &Ref))
         return EC;
-      Sym->setSymbolRef(Symtab[Sym->getName()]);
+      Sym->setSymbolRef(Ref);
     } else {
       Sym->setSymbolRef(new (Alloc) SymbolRef(Sym.get()));
     }
@@ -63,7 +64,7 @@ std::error_code SymbolTable::addFile(ObjectFile *File) {
 std::error_code SymbolTable::addFile(ArchiveFile *File) {
   ArchiveFiles.emplace_back(File);
   for (std::unique_ptr<Symbol> &Sym : File->getSymbols())
-    if (auto EC = resolve(Sym.get()))
+    if (auto EC = resolve(Sym.get(), nullptr))
       return EC;
   return std::error_code();
 }
@@ -71,7 +72,7 @@ std::error_code SymbolTable::addFile(ArchiveFile *File) {
 std::error_code SymbolTable::addFile(ImplibFile *File) {
   ImplibFiles.emplace_back(File);
   for (std::unique_ptr<Symbol> &Sym : File->getSymbols())
-    if (auto EC = resolve(Sym.get()))
+    if (auto EC = resolve(Sym.get(), nullptr))
       return EC;
   return std::error_code();
 }
@@ -87,39 +88,20 @@ bool SymbolTable::reportRemainingUndefines() {
   return false;
 }
 
-// This function takes two arguments, an existing symbol and a new
-// one, to resolve the conflict. Here is the decision table.
-//
-// [Undefined Undefined]
-// There are two object files referencing the same undefined symbol.
-// Undefined symbols don't have much identity, so a selection is
-// arbitrary. We choose the existing one.
-//
-// [Undefined CanBeDefnied]
-// There was a library file that could define a symbol, and we find an
-// object file referencing the symbol as an undefined one. Read a
-// member file from the library to make the can-be-defined symbol
-// into an defined symbol.
-//
-// [Undefiend Defined]
-// There was an object file referencing an undefined symbol, and the
-// undefined symbol is now being resolved. Select the defined symbol.
-//
-// [CanBeDefined CanBeDefined]
-// We have two libraries having the same symbol. We warn on that and
-// choose the existing one.
-//
-// [CanBeDefined Defined]
-// A symbol in an archive file is now resolved. Select the defined
-// symbol.
-//
-// [Defined Defined]
-// Select one of them if they are Common or COMDAT symbols.
-std::error_code SymbolTable::resolve(Symbol *Sym) {
+// This function resolves conflicts if a given symbol has the same
+// name as an existing symbol. Decisions are made based on symbol
+// types.
+std::error_code SymbolTable::resolve(Symbol *Sym, SymbolRef **RefP) {
   StringRef Name = Sym->getName();
-  if (Symtab.count(Name) == 0)
-    Symtab[Name] = new (Alloc) SymbolRef();
-  SymbolRef *Ref = Symtab[Name];
+  auto It = Symtab.find(Name);
+  if (It == Symtab.end())
+    It = Symtab.insert(It, std::make_pair(Name, new (Alloc) SymbolRef()));
+  SymbolRef *Ref = It->second;
+
+  // RefP is not significant in this function. It's here to reduce the
+  // number of hash table lookup in the caller.
+  if (RefP)
+    *RefP = Ref;
 
   // If nothing exists yet, just add a new one.
   if (Ref->Ptr == nullptr) {
@@ -128,10 +110,21 @@ std::error_code SymbolTable::resolve(Symbol *Sym) {
   }
 
   if (isa<Undefined>(Ref->Ptr)) {
+    // Undefined and Undefined: There are two object files referencing
+    // the same undefined symbol. Undefined symbols don't have much
+    // identity, so a selection is arbitrary. We choose the existing
+    // one.
     if (isa<Undefined>(Sym))
       return std::error_code();
+
+    // CanBeDefined and Undefined: We read an archive member file
+    // pointed by the CanBeDefined symbol to resolve the Undefined
+    // symbol.
     if (auto *New = dyn_cast<CanBeDefined>(Sym))
       return addMemberFile(New);
+
+    // Undefined and Defined: An undefined symbol is now being
+    // resolved. Select the Defined symbol.
     assert(isa<Defined>(Sym));
     Ref->Ptr = Sym;
     return std::error_code();
@@ -142,15 +135,18 @@ std::error_code SymbolTable::resolve(Symbol *Sym) {
       Ref->Ptr = Sym;
       return std::error_code();
     }
-    if (isa<CanBeDefined>(Sym)) {
-      // llvm::errs() << "Two or more library files define the same symbol: "
-      //              << Sym->getName() << "\n";
+
+    // CanBeDefined and CanBeDefined: We have two libraries having the
+    // same symbol. We probably should print a warning message.
+    if (isa<CanBeDefined>(Sym))
       return std::error_code();
-    }
+
     assert(isa<Undefined>(Sym));
     return addMemberFile(Existing);
   }
 
+  // Both symbols are defined symbols. Select one of them if they are
+  // Common or COMDAT symbols.
   Defined *Existing = cast<Defined>(Ref->Ptr);
   if (isa<Undefined>(Sym) || isa<CanBeDefined>(Sym))
     return std::error_code();
