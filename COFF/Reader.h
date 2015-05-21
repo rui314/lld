@@ -48,6 +48,8 @@ struct SymbolRef;
 
 class Chunk {
 public:
+  ~Chunk() {}
+
   virtual const uint8_t *getData() const = 0;
   virtual size_t getSize() const = 0;
   virtual void applyRelocations(uint8_t *Buffer) = 0;

@@ -11,6 +11,7 @@
 #define LLD_COFF_SYMBOL_TABLE_H
 
 #include "Reader.h"
+#include "llvm/Support/Allocator.h"
 
 namespace lld {
 namespace coff {
@@ -42,6 +43,11 @@ private:
   std::vector<std::unique_ptr<ObjectFile>> ObjectFiles;
   std::vector<std::unique_ptr<ArchiveFile>> ArchiveFiles;
   std::map<llvm::StringRef, SymbolRef *> Symtab;
+
+  void addInitialSymbol(Symbol *Sym);
+
+  std::vector<std::unique_ptr<Symbol>> Symbols;
+  llvm::BumpPtrAllocator Alloc;
 };
 
 } // namespace pecoff

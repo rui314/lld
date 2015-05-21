@@ -19,8 +19,8 @@ namespace coff {
 bool parseDirectives(StringRef S, std::vector<std::unique_ptr<InputFile>> *Res);
 
 SymbolTable::SymbolTable() {
-  Symtab["__ImageBase"] = new SymbolRef(new DefinedAbsolute("__ImageBase", ImageBase));
-  Symtab["mainCRTStartup"] = new SymbolRef(new Undefined("mainCRTStartup"));
+  addInitialSymbol(new DefinedAbsolute("__ImageBase", ImageBase));
+  addInitialSymbol(new Undefined("mainCRTStartup"));
 }
 
 std::error_code SymbolTable::addFile(std::unique_ptr<InputFile> File) {
@@ -44,7 +44,7 @@ std::error_code SymbolTable::addFile(ObjectFile *File) {
         return EC;
       Sym->setSymbolRef(Symtab[Sym->getName()]);
     } else {
-      Sym->setSymbolRef(new SymbolRef(Sym.get()));
+      Sym->setSymbolRef(new (Alloc) SymbolRef(Sym.get()));
     }
   }
 
@@ -118,7 +118,7 @@ bool SymbolTable::reportRemainingUndefines() {
 std::error_code SymbolTable::resolve(Symbol *Sym) {
   StringRef Name = Sym->getName();
   if (Symtab.count(Name) == 0)
-    Symtab[Name] = new SymbolRef();
+    Symtab[Name] = new (Alloc) SymbolRef();
   SymbolRef *Ref = Symtab[Name];
 
   // If nothing exists yet, just add a new one.
@@ -203,6 +203,11 @@ void SymbolTable::dump() {
     if (auto *Sym = dyn_cast<Defined>(Ref->Ptr))
       llvm::dbgs() << "0x" << Twine::utohexstr(ImageBase + Sym->getRVA()) << " " << Sym->getName() << "\n";
   }
+}
+
+void SymbolTable::addInitialSymbol(Symbol *Sym) {
+  Symbols.push_back(std::unique_ptr<Symbol>(Sym));
+  Symtab[Sym->getName()] = new (Alloc) SymbolRef(Sym);
 }
 
 } // namespace coff
