@@ -64,6 +64,10 @@ public:
   virtual uint32_t getPermissions() const { return 0; }
   virtual StringRef getSectionName() const { unimplemented(); }
 
+  virtual bool isRoot() { return false; }
+  virtual bool isLive() { return true; }
+  virtual void markLive() {}
+
   uint64_t getRVA() { return RVA; }
   uint64_t getFileOff() { return FileOff; }
   uint64_t getAlign() { return Align; }
@@ -92,6 +96,10 @@ public:
   uint32_t getPermissions() const override;
   StringRef getSectionName() const override { return SectionName; }
 
+  bool isRoot() override;
+  void markLive() override;
+  bool isLive() override { return Live; }
+
 private:
   void applyRelocation(uint8_t *Buffer, const coff_relocation *Rel);
 
@@ -99,6 +107,7 @@ private:
   const coff_section *Header;
   StringRef SectionName;
   ArrayRef<uint8_t> Data;
+  bool Live = false;
 };
 
 class CommonChunk : public Chunk {
@@ -192,6 +201,7 @@ public:
   virtual bool isCommon() const { return false; }
   virtual uint32_t getCommonSize() const { return 0; }
   virtual bool isCOMDAT() const { return false; }
+  virtual void markLive() {}
 };
 
 class DefinedRegular : public Defined {
@@ -208,6 +218,7 @@ public:
   uint32_t getCommonSize() const override;
   bool isCOMDAT() const override;
   bool isExternal() override { return Sym.isExternal(); }
+  void markLive() override { Section->markLive(); }
 
 private:
   ObjectFile *File;

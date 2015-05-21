@@ -27,7 +27,7 @@ public:
     return ObjectFiles;
   }
 
-  uint64_t getRVA(StringRef Symbol);
+  Symbol *find(StringRef Name);
   void dump();
 
   std::vector<std::unique_ptr<ImplibFile>> ImplibFiles;

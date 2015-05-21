@@ -33,6 +33,7 @@ public:
   void write(StringRef Path);
 
 private:
+  void markChunks();
   void groupSections();
   void createImportTables();
   void assignAddresses();

@@ -264,6 +264,24 @@ const uint8_t *SectionChunk::getData() const {
   return Data.data();
 }
 
+bool SectionChunk::isRoot() {
+  return !(Header->Characteristics & llvm::COFF::IMAGE_SCN_CNT_CODE);
+}
+
+void SectionChunk::markLive() {
+  if (Live)
+    return;
+  Live = true;
+  DataRefImpl Ref;
+  Ref.p = uintptr_t(Header);
+  COFFObjectFile *FP = File->COFFFile.get();
+  for (const auto &I : SectionRef(Ref, FP).relocations()) {
+    const coff_relocation *Rel = FP->getCOFFRelocation(I);
+    auto *S = cast<Defined>(File->SymbolRefs[Rel->SymbolTableIndex]->Ptr);
+    S->markLive();
+  }
+}
+
 void SectionChunk::applyRelocations(uint8_t *Buffer) {
   DataRefImpl Ref;
   Ref.p = uintptr_t(Header);

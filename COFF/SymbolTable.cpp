@@ -185,12 +185,11 @@ std::error_code SymbolTable::addMemberFile(CanBeDefined *Sym) {
   return addFile(std::move(File));
 }
 
-uint64_t SymbolTable::getRVA(StringRef Symbol) {
-  auto It = Symtab.find(Symbol);
+Symbol *SymbolTable::find(StringRef Name) {
+  auto It = Symtab.find(Name);
   if (It == Symtab.end())
-    return 0;
-  SymbolRef *Ref = It->second;
-  return cast<Defined>(Ref->Ptr)->getRVA();
+    return nullptr;
+  return It->second->Ptr;
 }
 
 void SymbolTable::dump() {

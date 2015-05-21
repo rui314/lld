@@ -30,11 +30,20 @@ StringRef dropDollar(StringRef S) {
   return S.substr(0, S.find('$'));
 }
 
+void Writer::markChunks() {
+  for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
+    for (std::unique_ptr<Chunk> &C : File->Chunks)
+      if (C && C->isRoot())
+        C->markLive();
+
+  cast<Defined>(Symtab->find("mainCRTStartup"))->markLive();
+}
+
 void Writer::groupSections() {
   std::map<StringRef, std::vector<Chunk *>> Map;
   for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
     for (std::unique_ptr<Chunk> &C : File->Chunks)
-      if (C)
+      if (C && C->isLive())
         Map[dropDollar(C->getSectionName())].push_back(C.get());
 
   auto comp = [](Chunk *A, Chunk *B) {
@@ -232,7 +241,7 @@ void Writer::writeSections() {
 }
 
 void Writer::backfillHeaders() {
-  uint64_t Entry = Symtab->getRVA("mainCRTStartup");
+  uint64_t Entry = cast<Defined>(Symtab->find("mainCRTStartup"))->getRVA();
   assert(Entry);
   PE->AddressOfEntryPoint = Entry;
   if (OutputSection *Text = findSection(".text")) {
@@ -289,6 +298,7 @@ void Writer::applyRelocations() {
 }
 
 void Writer::write(StringRef OutputPath) {
+  markChunks();
   groupSections();
   createImportTables();
   assignAddresses();
