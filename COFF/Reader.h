@@ -146,6 +146,7 @@ class Symbol {
 public:
   enum Kind {
     DefinedRegularKind,
+    DefinedAbsoluteKind,
     DefinedImportDataKind,
     DefinedImportFuncKind,
     UndefinedKind,
@@ -204,6 +205,22 @@ private:
   ObjectFile *File;
   COFFSymbolRef Sym;
   Chunk *Section;
+};
+
+class DefinedAbsolute : public Defined {
+public:
+  DefinedAbsolute(StringRef Name, uint64_t VA)
+    : Defined(DefinedAbsoluteKind, Name), RVA(VA - ImageBase) {}
+
+  static bool classof(const Symbol *S) {
+    return S->kind() == DefinedAbsoluteKind;
+  }
+
+  uint64_t getRVA() override { return RVA; }
+  uint64_t getFileOff() override { llvm_unreachable("not implemented"); }
+
+private:
+  uint64_t RVA;
 };
 
 class DefinedImportData : public Defined {

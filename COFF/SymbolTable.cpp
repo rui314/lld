@@ -16,6 +16,11 @@
 namespace lld {
 namespace coff {
 
+SymbolTable::SymbolTable() {
+  Symbol *Sym = new DefinedAbsolute("__ImageBase", ImageBase);
+  Symtab["__ImageBase"] = new SymbolRef(Sym);
+}
+
 std::error_code SymbolTable::addFile(std::unique_ptr<InputFile> File) {
   InputFile *P = File.release();
   if (auto *F = dyn_cast<ObjectFile>(P))

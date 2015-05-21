@@ -17,6 +17,8 @@ namespace coff {
 
 class SymbolTable {
 public:
+  SymbolTable();
+
   std::error_code addFile(std::unique_ptr<InputFile> File);
   bool reportRemainingUndefines();
 
