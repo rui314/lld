@@ -23,6 +23,7 @@
 #include "llvm/Option/Option.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
@@ -102,7 +103,7 @@ static std::vector<StringRef> splitPathList(StringRef str) {
   return ret;
 }
 
-std::unique_ptr<llvm::opt::InputArgList>
+ErrorOr<std::unique_ptr<llvm::opt::InputArgList>>
 parseArgs(int Argc, const char *Argv[]) {
   COFFOptTable Table;
   unsigned MissingIndex;
@@ -110,16 +111,17 @@ parseArgs(int Argc, const char *Argv[]) {
   std::unique_ptr<llvm::opt::InputArgList> Args(
       Table.ParseArgs(&Argv[1], &Argv[Argc], MissingIndex, MissingCount));
   if (MissingCount) {
-    llvm::errs() << "error: missing arg value for '"
-                 << Args->getArgString(MissingIndex) << "' expected "
-                 << MissingCount << " argument(s).\n";
-    return nullptr;
+    std::string S;
+    llvm::raw_string_ostream OS(S);
+    OS << llvm::format("missing arg value for \"%s\", expected %d argument%s.",
+                       Args->getArgString(MissingIndex),
+                       MissingCount, (MissingCount == 1 ? "" : "s"));
+    OS.flush();
+    return lld::make_dynamic_error_code(StringRef(S));
   }
-  for (auto *Arg : Args->filtered(OPT_UNKNOWN)) {
-    llvm::errs() << "warning: ignoring unknown argument: "
-                 << Arg->getSpelling() << "\n";
-  }
-  return Args;
+  for (auto *Arg : Args->filtered(OPT_UNKNOWN))
+    llvm::errs() << "ignoring unknown argument: " << Arg->getSpelling() << "\n";
+  return std::move(Args);
 }
 
 namespace lld {
@@ -172,7 +174,8 @@ ErrorOr<std::unique_ptr<InputFile>> createFile(StringRef Path) {
 
 std::set<std::string> VisitedFiles;
 
-bool parseDirectives(StringRef S, std::vector<std::unique_ptr<InputFile>> *Res) {
+std::error_code parseDirectives(StringRef S,
+                                std::vector<std::unique_ptr<InputFile>> *Res) {
   SmallVector<const char *, 16> Tokens;
   Tokens.push_back("link"); // argv[0] value. Will be ignored.
   llvm::cl::TokenizeWindowsCommandLine(S, StringSaver, Tokens);
@@ -180,9 +183,10 @@ bool parseDirectives(StringRef S, std::vector<std::unique_ptr<InputFile>> *Res) 
   int Argc = Tokens.size() - 1;
   const char **Argv = &Tokens[0];
 
-  std::unique_ptr<llvm::opt::InputArgList> Args = parseArgs(Argc, Argv);
-  if (!Args)
-    return false;
+  auto ArgsOrErr = parseArgs(Argc, Argv);
+  if (auto EC = ArgsOrErr.getError())
+    return EC;
+  std::unique_ptr<llvm::opt::InputArgList> Args = std::move(ArgsOrErr.get());
 
   for (auto *Arg : Args->filtered(OPT_defaultlib)) {
     std::string Path = findLib(Arg->getValue());
@@ -190,19 +194,21 @@ bool parseDirectives(StringRef S, std::vector<std::unique_ptr<InputFile>> *Res) 
       continue;
     VisitedFiles.insert(StringRef(Path).lower());
     ErrorOr<std::unique_ptr<InputFile>> FileOrErr = ArchiveFile::create(Path);
-    if (auto EC = FileOrErr.getError()) {
-      llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";
-      return false;
-    }
+    if (auto EC = FileOrErr.getError())
+      return EC;
     Res->push_back(std::move(FileOrErr.get()));
   }
-  return true;
+  return std::error_code();
 }
 
 bool link(int Argc, const char *Argv[]) {
-  std::unique_ptr<llvm::opt::InputArgList> Args = parseArgs(Argc, Argv);
-  if (!Args)
+  auto ArgsOrErr = parseArgs(Argc, Argv);
+  if (auto EC = ArgsOrErr.getError()) {
+    llvm::errs() << EC.message() << "\n";
     return false;
+  }
+  std::unique_ptr<llvm::opt::InputArgList> Args = std::move(ArgsOrErr.get());
+
   SymbolTable Symtab;
   for (auto *Arg : Args->filtered(OPT_INPUT)) {
     std::string Path = findFile(Arg->getValue());
