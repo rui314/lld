@@ -104,6 +104,26 @@ static std::vector<StringRef> splitPathList(StringRef str) {
   return ret;
 }
 
+std::unique_ptr<llvm::opt::InputArgList>
+parseArgs(int Argc, const char *Argv[]) {
+  COFFOptTable Table;
+  unsigned MissingIndex;
+  unsigned MissingCount;
+  std::unique_ptr<llvm::opt::InputArgList> Args(
+      Table.ParseArgs(&Argv[1], &Argv[Argc], MissingIndex, MissingCount));
+  if (MissingCount) {
+    llvm::errs() << "error: missing arg value for '"
+                 << Args->getArgString(MissingIndex) << "' expected "
+                 << MissingCount << " argument(s).\n";
+    return nullptr;
+  }
+  for (auto *Arg : Args->filtered(OPT_UNKNOWN)) {
+    llvm::errs() << "warning: ignoring unknown argument: "
+                 << Arg->getSpelling() << "\n";
+  }
+  return Args;
+}
+
 namespace lld {
 namespace coff {
 
@@ -156,23 +176,16 @@ std::set<std::string> VisitedFiles;
 
 bool parseDirectives(StringRef S, std::vector<std::unique_ptr<InputFile>> *Res) {
   SmallVector<const char *, 16> Tokens;
-  Tokens.push_back("link"); // argv[0] is the command name. Will be ignored.
+  Tokens.push_back("link"); // argv[0] value. Will be ignored.
   llvm::cl::TokenizeWindowsCommandLine(S, StringSaver, Tokens);
   Tokens.push_back(nullptr);
   int Argc = Tokens.size() - 1;
   const char **Argv = &Tokens[0];
 
-  COFFOptTable Table;
-  unsigned MissingIndex;
-  unsigned MissingCount;
-  std::unique_ptr<llvm::opt::InputArgList> Args(
-    Table.ParseArgs(&Argv[1], &Argv[Argc], MissingIndex, MissingCount));
-  if (MissingCount) {
-    llvm::errs() << "error: missing arg value for '"
-                 << Args->getArgString(MissingIndex) << "' expected "
-                 << MissingCount << " argument(s).\n";
+  std::unique_ptr<llvm::opt::InputArgList> Args = parseArgs(Argc, Argv);
+  if (!Args)
     return false;
-  }
+
   for (auto *Arg : Args->filtered(OPT_defaultlib)) {
     std::string Path = findLib(Arg->getValue());
     if (VisitedFiles.count(StringRef(Path).lower()) > 0)
@@ -189,28 +202,9 @@ bool parseDirectives(StringRef S, std::vector<std::unique_ptr<InputFile>> *Res) 
 }
 
 bool link(int Argc, const char *Argv[]) {
-  COFFOptTable Table;
-  unsigned MissingIndex;
-  unsigned MissingCount;
-  std::unique_ptr<llvm::opt::InputArgList> Args(
-    Table.ParseArgs(&Argv[1], &Argv[Argc], MissingIndex, MissingCount));
-  if (MissingCount) {
-    llvm::errs() << "error: missing arg value for '"
-                 << Args->getArgString(MissingIndex) << "' expected "
-                 << MissingCount << " argument(s).\n";
+  std::unique_ptr<llvm::opt::InputArgList> Args = parseArgs(Argc, Argv);
+  if (!Args)
     return false;
-  }
-
-  for (auto *Arg : Args->filtered(OPT_UNKNOWN)) {
-    llvm::errs() << "warning: ignoring unknown argument: "
-                 << Arg->getSpelling() << "\n";
-  }
-
-  if (Args->filtered_begin(OPT_INPUT) == Args->filtered_end()) {
-    llvm::errs() << "no input files.\n";
-    return true;
-  }
-
   SymbolTable Symtab;
   for (auto *Arg : Args->filtered(OPT_INPUT)) {
     std::string Path = findFile(Arg->getValue());
