@@ -17,8 +17,8 @@ namespace lld {
 namespace coff {
 
 SymbolTable::SymbolTable() {
-  Symbol *Sym = new DefinedAbsolute("__ImageBase", ImageBase);
-  Symtab["__ImageBase"] = new SymbolRef(Sym);
+  Symtab["__ImageBase"] = new SymbolRef(new DefinedAbsolute("__ImageBase", ImageBase));
+  Symtab["mainCRTStartup"] = new SymbolRef(new Undefined("mainCRTStartup"));
 }
 
 std::error_code SymbolTable::addFile(std::unique_ptr<InputFile> File) {
@@ -182,6 +182,15 @@ uint64_t SymbolTable::getRVA(StringRef Symbol) {
     return 0;
   SymbolRef *Ref = It->second;
   return cast<Defined>(Ref->Ptr)->getRVA();
+}
+
+void SymbolTable::dump() {
+  for (auto &P : Symtab) {
+    StringRef Name = P.first;
+    SymbolRef *Ref = P.second;
+    if (auto *Sym = dyn_cast<Defined>(Ref->Ptr))
+      llvm::dbgs() << "0x" << Twine::utohexstr(ImageBase + Sym->getRVA()) << " " << Sym->getName() << "\n";
+  }
 }
 
 } // namespace coff

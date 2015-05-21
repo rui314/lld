@@ -27,6 +27,7 @@ public:
   }
 
   uint64_t getRVA(StringRef Symbol);
+  void dump();
 
   std::vector<std::unique_ptr<ImplibFile>> ImplibFiles;
 

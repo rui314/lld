@@ -34,7 +34,8 @@ void Writer::groupSections() {
   std::map<StringRef, std::vector<Chunk *>> Map;
   for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
     for (Chunk *C : File->Chunks)
-      Map[dropDollar(C->getSectionName())].push_back(C);
+      if (C)
+	Map[dropDollar(C->getSectionName())].push_back(C);
 
   auto comp = [](Chunk *A, Chunk *B) {
     return A->getSectionName() < B->getSectionName();
@@ -228,7 +229,9 @@ void Writer::writeSections() {
 }
 
 void Writer::backfillHeaders() {
-  PE->AddressOfEntryPoint = Symtab->getRVA("main");
+  uint64_t Entry = Symtab->getRVA("mainCRTStartup");
+  assert(Entry);
+  PE->AddressOfEntryPoint = Entry;
   if (OutputSection *Text = findSection(".text")) {
     PE->BaseOfCode = Text->getRVA();
     PE->SizeOfCode = Text->getRawSize();
@@ -292,6 +295,7 @@ void Writer::write(StringRef OutputPath) {
   writeSections();
   applyRelocations();
   backfillHeaders();
+  // Symtab->dump();
   Buffer->commit();
 }
 

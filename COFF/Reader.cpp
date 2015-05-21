@@ -133,14 +133,21 @@ ErrorOr<std::unique_ptr<ObjectFile>> ObjectFile::create(StringRef Path) {
 ObjectFile::ObjectFile(StringRef N, std::unique_ptr<COFFObjectFile> F)
     : InputFile(ObjectKind), Name(N), COFFFile(std::move(F)) {
   uint32_t NumSections = COFFFile->getNumberOfSections();
+  Chunks.resize(NumSections + 1);
   for (uint32_t I = 1; I < NumSections + 1; ++I) {
     const coff_section *Sec;
+    StringRef Name;
     if (auto EC = COFFFile->getSection(I, Sec)) {
-      llvm::errs() << "getSection failed: " << Name << ": "
-		   << EC.message() << "\n";
+      llvm::errs() << "getSection failed: " << Name << ": " << EC.message() << "\n";
       return;
     }
-    Chunks.push_back(new SectionChunk(this, Sec));
+    if (auto EC = COFFFile->getSectionName(Sec, Name)) {
+      llvm::errs() << "getSectionName failed: " << Name << ": " << EC.message() << "\n";
+      return;
+    }
+    if (Name.startswith(".debug") || Name == ".drectve")
+      continue;
+    Chunks[I] = new SectionChunk(this, Sec);
   }
 }
 
@@ -180,14 +187,16 @@ std::vector<Symbol *> ObjectFile::getSymbols() {
 
     Symbol *P = nullptr;
     if (Sref.isUndefined()) {
-      P = new Undefined(this, SymbolName);
+      P = new Undefined(SymbolName);
     } else if (Sref.isCommon()) {
       Chunk *C = new CommonChunk(Sref);
+      Chunks.push_back(C);
       P = new DefinedRegular(this, SymbolName, Sref, C);
     } else if (Sref.getSectionNumber() == -1) {
       // absolute symbol
     } else {
-      P = new DefinedRegular(this, SymbolName, Sref, Chunks[Sref.getSectionNumber() - 1]);
+      if (Chunk *C = Chunks[Sref.getSectionNumber()])
+	P = new DefinedRegular(this, SymbolName, Sref, C);
     }
     if (P) {
       P->setSymbolRefAddress(&Symbols[I]);

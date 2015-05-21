@@ -281,15 +281,11 @@ private:
 
 class Undefined : public Symbol {
 public:
-  Undefined(ObjectFile *F, StringRef Name)
-    : Symbol(UndefinedKind, Name), File(F) {}
+  Undefined(StringRef Name) : Symbol(UndefinedKind, Name) {}
 
   static bool classof(const Symbol *S) {
     return S->kind() == UndefinedKind;
   }
-
-private:
-  ObjectFile *File;
 };
 
 struct SymbolRef {
