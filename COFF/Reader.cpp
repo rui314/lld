@@ -202,7 +202,7 @@ std::vector<Symbol *> ObjectFile::getSymbols() {
       // absolute symbol
     } else {
       if (Chunk *C = Chunks[Sref.getSectionNumber()])
-	P = new DefinedRegular(this, SymbolName, Sref, C);
+        P = new DefinedRegular(this, SymbolName, Sref, C);
     }
     if (P) {
       P->setSymbolRefAddress(&Symbols[I]);

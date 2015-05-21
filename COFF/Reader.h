@@ -326,7 +326,7 @@ public:
 
 private:
   ArchiveFile(StringRef N, std::unique_ptr<Archive> F,
-	      std::unique_ptr<MemoryBuffer> M)
+              std::unique_ptr<MemoryBuffer> M)
     : InputFile(ArchiveKind), Name(N), File(std::move(F)), MB(std::move(M)) {}
 
   std::unique_ptr<MemoryBuffer> MB;

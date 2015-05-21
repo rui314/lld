@@ -41,7 +41,7 @@ std::error_code SymbolTable::addFile(ObjectFile *File) {
       // Only externally-visible symbols are subjects of symbol
       // resolution.
       if (auto EC = resolve(Sym))
-	return EC;
+        return EC;
       Sym->setSymbolRef(Symtab[Sym->getName()]);
     } else {
       Sym->setSymbolRef(new SymbolRef(Sym));
@@ -143,8 +143,8 @@ std::error_code SymbolTable::resolve(Symbol *Sym) {
       return std::error_code();
     }
     if (isa<CanBeDefined>(Sym)) {
-      llvm::errs() << "Two or more library files define the same symbol: "
-		   << Sym->getName() << "\n";
+      // llvm::errs() << "Two or more library files define the same symbol: "
+      //              << Sym->getName() << "\n";
       return std::error_code();
     }
     assert(isa<Undefined>(Sym));
@@ -160,7 +160,7 @@ std::error_code SymbolTable::resolve(Symbol *Sym) {
   if (Existing->isCommon()) {
     if (New->isCommon()) {
       if (Existing->getCommonSize() < New->getCommonSize())
-	Ref->Ptr = New;
+        Ref->Ptr = New;
       return std::error_code();
     }
     Ref->Ptr = New;

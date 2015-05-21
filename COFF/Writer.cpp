@@ -35,7 +35,7 @@ void Writer::groupSections() {
   for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
     for (Chunk *C : File->Chunks)
       if (C)
-	Map[dropDollar(C->getSectionName())].push_back(C);
+        Map[dropDollar(C->getSectionName())].push_back(C);
 
   auto comp = [](Chunk *A, Chunk *B) {
     return A->getSectionName() < B->getSectionName();
@@ -62,8 +62,8 @@ std::map<StringRef, std::vector<DefinedImportData *>> Writer::groupImports() {
   for (std::unique_ptr<ImplibFile> &P : Symtab->ImplibFiles) {
     for (Symbol *S : P->getSymbols()) {
       if (auto *Sym = dyn_cast<DefinedImportData>(S)) {
-	Ret[Sym->getDLLName()].push_back(Sym);
-	continue;
+        Ret[Sym->getDLLName()].push_back(Sym);
+        continue;
       }
       Text->addChunk(cast<DefinedImportFunc>(S)->getChunk());
     }
@@ -129,9 +129,9 @@ void Writer::removeEmptySections() {
     return S->getVirtualSize() == 0;
   };
   OutputSections.erase(std::remove_if(OutputSections.begin(),
-				      OutputSections.end(),
-				      IsEmpty),
-		       OutputSections.end());
+                                      OutputSections.end(),
+                                      IsEmpty),
+                       OutputSections.end());
 }
 
 void Writer::assignAddresses() {
@@ -172,8 +172,8 @@ void Writer::writeHeader() {
   COFF->Machine = llvm::COFF::IMAGE_FILE_MACHINE_AMD64;
   COFF->NumberOfSections = OutputSections.size();
   COFF->Characteristics = (llvm::COFF::IMAGE_FILE_EXECUTABLE_IMAGE
-			   | llvm::COFF::IMAGE_FILE_RELOCS_STRIPPED
-			   | llvm::COFF::IMAGE_FILE_LARGE_ADDRESS_AWARE);
+                           | llvm::COFF::IMAGE_FILE_RELOCS_STRIPPED
+                           | llvm::COFF::IMAGE_FILE_LARGE_ADDRESS_AWARE);
   COFF->SizeOfOptionalHeader = sizeof(pe32plus_header)
     + sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
 
@@ -210,7 +210,7 @@ void Writer::openFile(StringRef OutputPath) {
   if (auto EC = FileOutputBuffer::create(
         OutputPath, Size, Buffer, FileOutputBuffer::F_executable)) {
     llvm::errs() << "Failed to open " << OutputPath
-		 << ": " << EC.message() << "\n";
+                 << ": " << EC.message() << "\n";
   }
 }
 
@@ -224,7 +224,7 @@ void Writer::writeSections() {
       memset(P + OSec->getFileOff(), 0xCC, OSec->getRawSize());
     for (Chunk *C : OSec->getChunks())
       if (!C->isBSS())
-	memcpy(P + C->getFileOff(), C->getData(), C->getSize());
+        memcpy(P + C->getFileOff(), C->getData(), C->getSize());
   }
 }
 

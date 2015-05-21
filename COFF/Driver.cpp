@@ -65,7 +65,7 @@ class COFFOptTable : public llvm::opt::OptTable {
 public:
   COFFOptTable()
     : OptTable(infoTable, llvm::array_lengthof(infoTable),
-	       /* ignoreCase */ true) {}
+               /* ignoreCase */ true) {}
 };
 
 class BumpPtrStringSaver : public llvm::cl::StringSaver {
@@ -169,8 +169,8 @@ bool parseDirectives(StringRef S, std::vector<std::unique_ptr<InputFile>> *Res) 
     Table.ParseArgs(&Argv[1], &Argv[Argc], MissingIndex, MissingCount));
   if (MissingCount) {
     llvm::errs() << "error: missing arg value for '"
-		 << Args->getArgString(MissingIndex) << "' expected "
-		 << MissingCount << " argument(s).\n";
+                 << Args->getArgString(MissingIndex) << "' expected "
+                 << MissingCount << " argument(s).\n";
     return false;
   }
   for (auto *Arg : Args->filtered(OPT_defaultlib)) {
@@ -196,14 +196,14 @@ bool link(int Argc, const char *Argv[]) {
     Table.ParseArgs(&Argv[1], &Argv[Argc], MissingIndex, MissingCount));
   if (MissingCount) {
     llvm::errs() << "error: missing arg value for '"
-		 << Args->getArgString(MissingIndex) << "' expected "
-		 << MissingCount << " argument(s).\n";
+                 << Args->getArgString(MissingIndex) << "' expected "
+                 << MissingCount << " argument(s).\n";
     return false;
   }
 
   for (auto *Arg : Args->filtered(OPT_UNKNOWN)) {
     llvm::errs() << "warning: ignoring unknown argument: "
-		 << Arg->getSpelling() << "\n";
+                 << Arg->getSpelling() << "\n";
   }
 
   if (Args->filtered_begin(OPT_INPUT) == Args->filtered_end()) {
