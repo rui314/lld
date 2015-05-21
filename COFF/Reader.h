@@ -31,6 +31,10 @@ using llvm::sys::fs::identify_magic;
 namespace lld {
 namespace coff {
 
+const int PageSize = 4096;
+const int FileAlignment = 512;
+const int SectionAlignment = 4096;
+const uint64_t ImageBase = 0x140000000;
 const uint32_t PermMask = 0xF00000F0;
 
 class ArchiveFile;

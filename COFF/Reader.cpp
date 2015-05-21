@@ -250,7 +250,6 @@ static void add64(uint8_t *L, int64_t V) { write64le(L, read64le(L) + V); }
 
 void SectionChunk::applyRelocation(uint8_t *Buffer, const coff_relocation *Rel) {
   using namespace llvm::COFF;
-  const uint64_t ImageBase = 0x140000000;
 
   uint8_t *Off = Buffer + getFileOff() + Rel->VirtualAddress;
   auto *Sym = cast<Defined>(File->Symbols[Rel->SymbolTableIndex]->Ptr);
@@ -300,7 +299,7 @@ bool SectionChunk::isCOMDAT() const {
 }
 
 void ImportFuncChunk::applyRelocations(uint8_t *Buffer) {
-  uint32_t Operand = ImpSymbol->getRVA() - getRVA() - 6;
+  uint32_t Operand = ImpSymbol->getRVA() - getRVA() - Data.size();
   write32le(Buffer + getFileOff() + 2, Operand);
 }
 
@@ -323,7 +322,6 @@ void OutputSection::setFileOffset(uint64_t Off) {
 }
 
 void OutputSection::addChunk(Chunk *C) {
-  const int FileAlignment = 512;
   Chunks.push_back(C);
   uint64_t Off = Header.VirtualSize;
   Off = RoundUpToAlignment(Off, C->getAlign());

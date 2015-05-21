@@ -19,16 +19,12 @@
 namespace lld {
 namespace coff {
 
-const int PageSize = 4096;
-const int FileAlignment = 512;
-const int SectionAlignment = 4096;
 const int DOSStubSize = 64;
 const int NumberfOfDataDirectory = 16;
 const int HeaderSize = DOSStubSize + sizeof(llvm::COFF::PEMagic)
   + sizeof(llvm::object::coff_file_header)
   + sizeof(llvm::object::pe32plus_header)
   + sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
-const uint64_t ImageBase = 0x140000000;
 
 class Writer {
 public:
@@ -46,6 +42,7 @@ private:
   void applyRelocations();
   void backfillHeaders();
   OutputSection *findSection(StringRef name);
+  OutputSection *createSection(StringRef name);
   std::map<StringRef, std::vector<DefinedImportData *>> groupImports();
 
   Resolver *Res;

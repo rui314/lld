@@ -57,7 +57,7 @@ void Writer::groupSections() {
 
 std::map<StringRef, std::vector<DefinedImportData *>> Writer::groupImports() {
   std::map<StringRef, std::vector<DefinedImportData *>> Ret;
-  OutputSection *Text = findSection(".text");
+  OutputSection *Text = createSection(".text");
   for (std::unique_ptr<ImplibFile> &P : Res->ImplibFiles) {
     for (Symbol *S : P->getSymbols()) {
       if (auto *Sym = dyn_cast<DefinedImportData>(S)) {
@@ -83,17 +83,13 @@ void Writer::createImportTables() {
   if (Res->ImplibFiles.empty())
     return;
 
-  std::unique_ptr<OutputSection> Idata(
-    new OutputSection(".idata", OutputSections.size()));
-  Idata->addPermission(llvm::COFF::IMAGE_SCN_CNT_INITIALIZED_DATA
-		       | llvm::COFF::IMAGE_SCN_MEM_READ);
-
   std::vector<ImportTable *> Tabs;
   for (auto &P : groupImports()) {
     StringRef DLLName = P.first;
     std::vector<DefinedImportData *> &Imports = P.second;
     Tabs.push_back(new ImportTable(DLLName, Imports));
   }
+  OutputSection *Idata = createSection(".idata");
 
   // Add the directory tables.
   for (ImportTable *T : Tabs)
@@ -125,7 +121,6 @@ void Writer::createImportTables() {
   // Add DLL names.
   for (ImportTable *T : Tabs)
     Idata->addChunk(&T->DirTab.Name);
-  OutputSections.push_back(std::move(Idata));
 }
 
 void Writer::removeEmptySections() {
@@ -249,11 +244,33 @@ void Writer::backfillHeaders() {
   }
 }
 
-OutputSection *Writer::findSection(StringRef name) {
+OutputSection *Writer::findSection(StringRef Name) {
   for (std::unique_ptr<OutputSection> &S : OutputSections)
-    if (S->getName() == name)
+    if (S->getName() == Name)
       return S.get();
   return nullptr;
+}
+
+OutputSection *Writer::createSection(StringRef Name) {
+  using namespace llvm::COFF;
+  if (auto *S = findSection(Name))
+    return S;
+  uint32_t Perm = 0;
+  if (Name == ".text") {
+    Perm = IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_EXECUTE;
+  } else if (Name == ".idata") {
+    Perm = IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ;
+  } else if (Name == ".rdata") {
+    Perm = IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ;
+  } else if (Name == ".data") {
+    Perm = IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
+  } else {
+    llvm_unreachable("unknown section name");
+  }
+  auto *S = new OutputSection(Name, OutputSections.size());
+  S->addPermission(Perm);
+  OutputSections.push_back(std::unique_ptr<OutputSection>(S));
+  return S;
 }
 
 void Writer::applyRelocations() {
