@@ -139,22 +139,23 @@ public:
   virtual ~Symbol() {}
 
   virtual bool isExternal() { return true; }
-  virtual StringRef getName() = 0;
+  StringRef getName() { return Name; }
 
   void setSymbolRefAddress(SymbolRef **PP) { SymbolRefPP = PP; }
   void setSymbolRef(SymbolRef *P) { *SymbolRefPP = P; }
 
 protected:
-  Symbol(Kind K) : SymbolKind(K) {}
+  Symbol(Kind K, StringRef N) : SymbolKind(K), Name(N) {}
 
 private:
   const Kind SymbolKind;
+  StringRef Name;
   SymbolRef **SymbolRefPP = nullptr;
 };
 
 class Defined : public Symbol {
 public:
-  Defined(Kind K) : Symbol(K) {}
+  Defined(Kind K, StringRef Name) : Symbol(K, Name) {}
 
   static bool classof(const Symbol *S) {
     Kind K = S->kind();
@@ -174,7 +175,6 @@ public:
     return S->kind() == DefinedRegularKind;
   }
 
-  StringRef getName() override { return Name; }
   uint64_t getRVA() override;
   uint64_t getFileOff() override;
   bool isCOMDAT() const override;
@@ -182,22 +182,20 @@ public:
 
 private:
   ObjectFile *File;
-  StringRef Name;
   COFFSymbolRef Sym;
   Chunk *Section;
 };
 
 class DefinedImportData : public Defined {
 public:
-  DefinedImportData(StringRef D, StringRef N)
-    : Defined(DefinedImportDataKind), DLLName(D),
-      Name((Twine("__imp_") + N).str()), ExpName(N) {}
+  DefinedImportData(StringRef D, StringRef ImportName, StringRef ExportName)
+    : Defined(DefinedImportDataKind, ImportName),
+      DLLName(D), ExpName(ExportName) {}
 
   static bool classof(const Symbol *S) {
     return S->kind() == DefinedImportDataKind;
   }
 
-  StringRef getName() override { return Name; }
   uint64_t getRVA() override { return Location->getRVA(); }
   uint64_t getFileOff() override { return Location->getFileOff(); }
   StringRef getDLLName() { return DLLName; }
@@ -206,27 +204,24 @@ public:
 
 private:
   StringRef DLLName;
-  std::string Name;
-  std::string ExpName;
+  StringRef ExpName;
   Chunk *Location = nullptr;
 };
 
 class DefinedImportFunc : public Defined {
 public:
-  DefinedImportFunc(StringRef N, DefinedImportData *S)
-    : Defined(DefinedImportFuncKind), Name(N), Data(S) {}
+  DefinedImportFunc(StringRef Name, DefinedImportData *S)
+    : Defined(DefinedImportFuncKind, Name), Data(S) {}
 
   static bool classof(const Symbol *S) {
     return S->kind() == DefinedImportFuncKind;
   }
 
-  StringRef getName() override { return Name; }
   uint64_t getRVA() override { return Data.getRVA(); }
   uint64_t getFileOff() override { return Data.getFileOff(); }
   Chunk *getChunk() { return &Data; }
 
 private:
-  std::string Name;
   DefinedImportData *ImpSymbol;
   ImportFuncChunk Data;
 };
@@ -234,35 +229,30 @@ private:
 class CanBeDefined : public Symbol {
 public:
   CanBeDefined(ArchiveFile *F, const Archive::Symbol S)
-    : Symbol(CanBeDefinedKind), Name(S.getName()), File(F), Sym(S) {}
+    : Symbol(CanBeDefinedKind, S.getName()), File(F), Sym(S) {}
 
   static bool classof(const Symbol *S) {
     return S->kind() == CanBeDefinedKind;
   }
 
-  StringRef getName() override { return Name; }
   ErrorOr<std::unique_ptr<InputFile>> getMember();
 
 private:
-  StringRef Name;
   ArchiveFile *File;
   const Archive::Symbol Sym;
 };
 
 class Undefined : public Symbol {
 public:
-  Undefined(ObjectFile *F, StringRef N)
-    : Symbol(UndefinedKind), File(F), Name(N) {}
+  Undefined(ObjectFile *F, StringRef Name)
+    : Symbol(UndefinedKind, Name), File(F) {}
 
   static bool classof(const Symbol *S) {
     return S->kind() == UndefinedKind;
   }
 
-  StringRef getName() override { return Name; }
-
 private:
   ObjectFile *File;
-  StringRef Name;
 };
 
 struct SymbolRef {

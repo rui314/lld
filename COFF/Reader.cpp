@@ -24,8 +24,8 @@ using llvm::RoundUpToAlignment;
 namespace lld {
 namespace coff {
 
-DefinedRegular::DefinedRegular(ObjectFile *F, StringRef N, COFFSymbolRef S, Chunk *C)
-  : Defined(DefinedRegularKind), File(F), Name(N), Sym(S), Section(C) {}
+DefinedRegular::DefinedRegular(ObjectFile *F, StringRef Name, COFFSymbolRef S, Chunk *C)
+  : Defined(DefinedRegularKind, Name), File(F), Sym(S), Section(C) {}
 
 bool DefinedRegular::isCOMDAT() const {
   return Section->isCOMDAT();
@@ -208,9 +208,10 @@ void ImplibFile::readImplib() {
     return;
   }
 
-  std::string Name = StringRef(Buf + sizeof(ImportHeader));
+  StringRef Name = *new std::string(StringRef(Buf + sizeof(ImportHeader)));
+  StringRef ImpName = *new std::string((Twine("__imp_") + Name).str());
   StringRef DLLName(Buf + sizeof(ImportHeader) + Name.size() + 1);
-  auto *ImpSym = new DefinedImportData(DLLName, Name);
+  auto *ImpSym = new DefinedImportData(DLLName, ImpName, Name);
   Symbols.push_back(ImpSym);
 
   uint16_t TypeInfo = read16le(Buf + offsetof(ImportHeader, TypeInfo));
