@@ -27,6 +27,15 @@ namespace coff {
 DefinedRegular::DefinedRegular(ObjectFile *F, StringRef Name, COFFSymbolRef S, Chunk *C)
   : Defined(DefinedRegularKind, Name), File(F), Sym(S), Section(C) {}
 
+bool DefinedRegular::isCommon() const {
+  return Section->isCommon();
+}
+
+uint32_t DefinedRegular::getCommonSize() const {
+  assert(isCommon());
+  return Sym.getValue();
+}
+
 bool DefinedRegular::isCOMDAT() const {
   return Section->isCOMDAT();
 }
@@ -172,6 +181,9 @@ std::vector<Symbol *> ObjectFile::getSymbols() {
     Symbol *P = nullptr;
     if (Sref.isUndefined()) {
       P = new Undefined(this, SymbolName);
+    } else if (Sref.isCommon()) {
+      Chunk *C = new CommonChunk(Sref);
+      P = new DefinedRegular(this, SymbolName, Sref, C);
     } else if (Sref.getSectionNumber() == -1) {
       // absolute symbol
     } else {
@@ -296,6 +308,19 @@ size_t SectionChunk::getSize() const {
 
 bool SectionChunk::isCOMDAT() const {
   return Header->Characteristics & llvm::COFF::IMAGE_SCN_LNK_COMDAT;
+}
+
+const uint8_t *CommonChunk::getData() const {
+  llvm_unreachable("not implemented");
+}
+
+size_t CommonChunk::getSize() const {
+  return Sym.getValue();
+}
+
+uint32_t CommonChunk::getPermission() const {
+  using namespace llvm::COFF;
+  return IMAGE_SCN_CNT_UNINITIALIZED_DATA | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
 }
 
 void ImportFuncChunk::applyRelocations(uint8_t *Buffer) {

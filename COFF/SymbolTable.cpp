@@ -97,8 +97,7 @@ bool SymbolTable::reportRemainingUndefines() {
 // symbol.
 //
 // [Defined Defined]
-// Resolve them according to COMDAT values if both are COMDAT symbols.
-// It's an error if they are not COMDAT.
+// Select one of them if they are Common or COMDAT symbols.
 std::error_code SymbolTable::resolve(Symbol *Sym) {
   StringRef Name = Sym->getName();
   if (Symtab.count(Name) == 0)
@@ -139,6 +138,21 @@ std::error_code SymbolTable::resolve(Symbol *Sym) {
   if (isa<Undefined>(Sym) || isa<CanBeDefined>(Sym))
     return std::error_code();
   Defined *New = cast<Defined>(Sym);
+
+  // Common symbols
+  if (Existing->isCommon()) {
+    if (New->isCommon()) {
+      if (Existing->getCommonSize() < New->getCommonSize())
+	Ref->Ptr = New;
+      return std::error_code();
+    }
+    Ref->Ptr = New;
+    return std::error_code();
+  }
+  if (New->isCommon())
+    return std::error_code();
+
+  // COMDAT symbols
   if (Existing->isCOMDAT() && New->isCOMDAT())
       return std::error_code();
   return make_dynamic_error_code(Twine("duplicate symbol: ") + Ref->Ptr->getName());

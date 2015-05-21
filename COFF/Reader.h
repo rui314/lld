@@ -52,6 +52,7 @@ public:
   virtual void applyRelocations(uint8_t *Buffer) = 0;
   virtual bool isBSS() const { return false; }
   virtual bool isCOMDAT() const { return false; }
+  virtual bool isCommon() const { return false; }
   virtual uint32_t getPermission() const { return 0; }
   virtual StringRef getSectionName() const { llvm_unreachable("not implemented"); }
 
@@ -90,6 +91,21 @@ private:
   const coff_section *Header;
   StringRef SectionName;
   ArrayRef<uint8_t> Data;
+};
+
+class CommonChunk : public Chunk {
+public:
+  CommonChunk(const COFFSymbolRef S) : Sym(S) {}
+  const uint8_t *getData() const override;
+  size_t getSize() const override;
+  void applyRelocations(uint8_t *Buffer) override {}
+  bool isBSS() const override { return true; }
+  bool isCommon() const override { return true; }
+  uint32_t getPermission() const override;
+  StringRef getSectionName() const override { return ".bss"; }
+
+private:
+  const COFFSymbolRef Sym;
 };
 
 class StringChunk : public Chunk {
@@ -164,6 +180,8 @@ public:
 
   virtual uint64_t getRVA() = 0;
   virtual uint64_t getFileOff() = 0;
+  virtual bool isCommon() const { return false; }
+  virtual uint32_t getCommonSize() const { return 0; }
   virtual bool isCOMDAT() const { return false; }
 };
 
@@ -177,6 +195,8 @@ public:
 
   uint64_t getRVA() override;
   uint64_t getFileOff() override;
+  bool isCommon() const override;
+  uint32_t getCommonSize() const override;
   bool isCOMDAT() const override;
   bool isExternal() override { return Sym.isExternal(); }
 

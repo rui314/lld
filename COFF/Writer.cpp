@@ -264,6 +264,8 @@ OutputSection *Writer::createSection(StringRef Name) {
     Perm = IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ;
   } else if (Name == ".data") {
     Perm = IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
+  } else if (Name == ".bss") {
+    Perm = IMAGE_SCN_CNT_UNINITIALIZED_DATA | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
   } else {
     llvm_unreachable("unknown section name");
   }
