@@ -48,6 +48,7 @@ public:
   virtual size_t getSize() const = 0;
   virtual void applyRelocations(uint8_t *Buffer) = 0;
   virtual bool isBSS() const { return false; }
+  virtual uint32_t getPermission() const { return 0; }
 
   uint64_t getRVA() { return RVA; }
   uint64_t getFileOff() { return FileOff; }
@@ -56,23 +57,32 @@ public:
   void setFileOff(uint64_t V) { FileOff = V; }
   void setAlign(uint64_t V) { Align = V; }
 
+  void setOutputSection(OutputSection *O) { Out = O; }
+  OutputSection *getOutputSection() { return Out; }
+
 private:
   uint64_t RVA = 0;
   uint64_t FileOff = 0;
   uint64_t Align = 1;
+  OutputSection *Out = nullptr;
 };
 
 class SectionChunk : public Chunk {
 public:
-  SectionChunk(InputSection *S);
+  SectionChunk(ObjectFile *File, const coff_section *Header);
   const uint8_t *getData() const override;
   size_t getSize() const override;
   void applyRelocations(uint8_t *Buffer) override;
   bool isBSS() const override;
+  bool isCOMDAT() const;
+  uint32_t getPermission() const override;
 
 private:
+  void applyRelocation(uint8_t *Buffer, const coff_relocation *Rel);
+
+  ObjectFile *File;
+  const coff_section *Header;
   ArrayRef<uint8_t> Data;
-  InputSection *Section;
 };
 
 class StringChunk : public Chunk {
@@ -167,7 +177,7 @@ private:
   ObjectFile *File;
   StringRef Name;
   COFFSymbolRef Sym;
-  InputSection *Section;
+  SectionChunk *Chunk;
 };
 
 class DefinedImportData : public Defined {
@@ -337,30 +347,18 @@ private:
 class InputSection {
 public:
   InputSection(ObjectFile *F, const coff_section *H)
-    : File(F), Header(H), Chunk(this) {
+      : File(F), Header(H), Chunk(F, H) {
     F->COFFFile->getSectionName(H, Name);
   }
 
-  bool isCOMDAT() const;
-  void applyRelocations(uint8_t *Buffer);
   StringRef getName() { return Name; }
   StringRef getNameDropDollar() { return Name.substr(0, Name.find('$')); }
-  void setOutputSection(OutputSection *O) { Out = O; }
-  Chunk *getChunk() { return &Chunk; }
-  void getSectionContents(ArrayRef<uint8_t> *Data);
-  uint64_t getVirtualSize() { return Header->VirtualSize; }
-  uint64_t getRawSize() { return Header->SizeOfRawData; }
-  uint32_t getPermission() { return Header->Characteristics & PermMask; }
-  uint32_t getAlign() const;
-  bool isBSS() const;
+  SectionChunk *getChunk() { return &Chunk; }
 
 private:
-  void applyRelocation(uint8_t *Buffer, const coff_relocation *Rel);
-
   const coff_section *Header;
   ObjectFile *File;
   SectionChunk Chunk;
-  OutputSection *Out = nullptr;
   StringRef Name;
 };
 

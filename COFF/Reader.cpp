@@ -26,18 +26,18 @@ namespace coff {
 
 DefinedRegular::DefinedRegular(ObjectFile *F, StringRef N, COFFSymbolRef SymRef)
   : Defined(DefinedRegularKind), File(F), Name(N), Sym(SymRef),
-    Section(&File->Sections[Sym.getSectionNumber() - 1]) {}
+    Chunk(File->Sections[Sym.getSectionNumber() - 1].getChunk()) {}
 
 bool DefinedRegular::isCOMDAT() const {
-  return Section->isCOMDAT();
+  return Chunk->isCOMDAT();
 }
 
 uint64_t DefinedRegular::getRVA() {
-  return Section->getChunk()->getRVA() + Sym.getValue();
+  return Chunk->getRVA() + Sym.getValue();
 }
 
 uint64_t DefinedRegular::getFileOff() {
-  return Section->getChunk()->getFileOff() + Sym.getValue();
+  return Chunk->getFileOff() + Sym.getValue();
 }
 
 ErrorOr<std::unique_ptr<InputFile>> CanBeDefined::getMember() {
@@ -220,10 +220,12 @@ void ImplibFile::readImplib() {
     Symbols.push_back(new DefinedImportFunc(Name, ImpSym));
 }
 
-SectionChunk::SectionChunk(InputSection *S) : Section(S) {
+SectionChunk::SectionChunk(ObjectFile *F, const coff_section *H)
+    : File(F), Header(H) {
   if (!isBSS())
-    Section->getSectionContents(&Data);
-  setAlign(S->getAlign());
+    File->COFFFile->getSectionContents(Header, Data);
+  unsigned Shift = ((Header->Characteristics & 0x00F00000) >> 20) - 1;
+  setAlign(uint32_t(1) << Shift);
 }
 
 const uint8_t *SectionChunk::getData() const {
@@ -232,36 +234,6 @@ const uint8_t *SectionChunk::getData() const {
 }
 
 void SectionChunk::applyRelocations(uint8_t *Buffer) {
-  Section->applyRelocations(Buffer);
-}
-
-bool SectionChunk::isBSS() const {
-  return Section->isBSS();
-}
-
-size_t SectionChunk::getSize() const {
-  return Section->getRawSize();
-}
-
-void ImportFuncChunk::applyRelocations(uint8_t *Buffer) {
-  uint32_t Operand = ImpSymbol->getRVA() - getRVA() - 6;
-  write32le(Buffer + getFileOff() + 2, Operand);
-}
-
-bool InputSection::isCOMDAT() const {
-  return Header->Characteristics & llvm::COFF::IMAGE_SCN_LNK_COMDAT;
-}
-
-uint32_t InputSection::getAlign() const {
-  unsigned Shift = ((Header->Characteristics & 0x00F00000) >> 20) - 1;
-  return uint32_t(1) << Shift;
-}
-
-bool InputSection::isBSS() const {
-  return Header->Characteristics & llvm::COFF::IMAGE_SCN_CNT_UNINITIALIZED_DATA;
-}
-
-void InputSection::applyRelocations(uint8_t *Buffer) {
   DataRefImpl Ref;
   Ref.p = uintptr_t(Header);
   COFFObjectFile *FP = File->COFFFile.get();
@@ -271,22 +243,18 @@ void InputSection::applyRelocations(uint8_t *Buffer) {
   }
 }
 
-void InputSection::getSectionContents(ArrayRef<uint8_t> *Data) {
-  File->COFFFile->getSectionContents(Header, *Data);
-}
-
 static void add16(uint8_t *L, int32_t V) { write16le(L, read16le(L) + V); }
 static void add32(uint8_t *L, int32_t V) { write32le(L, read32le(L) + V); }
 static void add64(uint8_t *L, int64_t V) { write64le(L, read64le(L) + V); }
 
-void InputSection::applyRelocation(uint8_t *Buffer, const coff_relocation *Rel) {
+void SectionChunk::applyRelocation(uint8_t *Buffer, const coff_relocation *Rel) {
   using namespace llvm::COFF;
   const uint64_t ImageBase = 0x140000000;
 
-  uint8_t *Off = Buffer + Chunk.getFileOff() + Rel->VirtualAddress;
+  uint8_t *Off = Buffer + getFileOff() + Rel->VirtualAddress;
   auto *Sym = cast<Defined>(File->Symbols[Rel->SymbolTableIndex]->Ptr);
   uint64_t S = Sym->getRVA();
-  uint64_t P = Chunk.getRVA() + Rel->VirtualAddress;
+  uint64_t P = getRVA() + Rel->VirtualAddress;
   if (Rel->Type == IMAGE_REL_AMD64_ADDR32) {
     add32(Off, ImageBase + S);
   } else if (Rel->Type == IMAGE_REL_AMD64_ADDR64) {
@@ -306,12 +274,33 @@ void InputSection::applyRelocation(uint8_t *Buffer, const coff_relocation *Rel) 
   } else if (Rel->Type == IMAGE_REL_AMD64_REL32_5) {
     add32(Off, S - P - 9);
   } else if (Rel->Type == IMAGE_REL_AMD64_SECTION) {
-    add16(Off, Out->getSectionIndex());
+    add16(Off, getOutputSection()->getSectionIndex());
   } else if (Rel->Type == IMAGE_REL_AMD64_SECREL) {
-    add32(Off, S - Out->getRVA());
+    add32(Off, S - getOutputSection()->getRVA());
   } else {
     llvm::report_fatal_error("Unsupported relocation type");
   }
+}
+
+bool SectionChunk::isBSS() const {
+  return Header->Characteristics & llvm::COFF::IMAGE_SCN_CNT_UNINITIALIZED_DATA;
+}
+
+uint32_t SectionChunk::getPermission() const {
+  return Header->Characteristics & PermMask;
+}
+
+size_t SectionChunk::getSize() const {
+  return Header->SizeOfRawData;
+}
+
+bool SectionChunk::isCOMDAT() const {
+  return Header->Characteristics & llvm::COFF::IMAGE_SCN_LNK_COMDAT;
+}
+
+void ImportFuncChunk::applyRelocations(uint8_t *Buffer) {
+  uint32_t Operand = ImpSymbol->getRVA() - getRVA() - 6;
+  write32le(Buffer + getFileOff() + 2, Operand);
 }
 
 OutputSection::OutputSection(StringRef N, uint32_t SI)

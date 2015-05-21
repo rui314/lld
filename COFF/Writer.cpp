@@ -43,9 +43,10 @@ void Writer::groupSections() {
     std::unique_ptr<OutputSection> OSec(
       new OutputSection(SectionName, OutputSections.size()));
     for (InputSection *ISec : InputSections) {
-      ISec->setOutputSection(OSec.get());
-      OSec->addChunk(ISec->getChunk());
-      OSec->addPermission(ISec->getPermission());
+      Chunk *C = ISec->getChunk();
+      C->setOutputSection(OSec.get());
+      OSec->addChunk(C);
+      OSec->addPermission(C->getPermission());
     }
     OutputSections.push_back(std::move(OSec));
   }
