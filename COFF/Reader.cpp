@@ -83,7 +83,8 @@ ErrorOr<std::unique_ptr<ArchiveFile>> ArchiveFile::create(StringRef Path) {
 std::vector<Symbol *> ArchiveFile::getSymbols() {
   std::vector<Symbol *> Ret;
   for (const Archive::Symbol &Sym : File->symbols())
-    Ret.push_back(new CanBeDefined(this, Sym));
+    if (Sym.getName() != "__NULL_IMPORT_DESCRIPTOR")
+      Ret.push_back(new CanBeDefined(this, Sym));
   return Ret;
 }
 

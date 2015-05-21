@@ -48,7 +48,7 @@ public:
   virtual void applyRelocations(uint8_t *Buffer) = 0;
   virtual bool isBSS() const { return false; }
   virtual uint32_t getPermission() const { return 0; }
-  virtual StringRef getSectionName() const { return ""; }
+  virtual StringRef getSectionName() const { llvm_unreachable("not implemented"); }
 
   uint64_t getRVA() { return RVA; }
   uint64_t getFileOff() { return FileOff; }
