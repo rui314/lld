@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLD_COFF_SYMBOL_H
-#define LLD_COFF_SYMBOL_H
+#ifndef LLD_COFF_READER_H
+#define LLD_COFF_READER_H
 
 #include "Allocator.h"
 #include "lld/Core/LLVM.h"
