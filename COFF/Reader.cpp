@@ -24,20 +24,19 @@ using llvm::RoundUpToAlignment;
 namespace lld {
 namespace coff {
 
-DefinedRegular::DefinedRegular(ObjectFile *F, StringRef N, COFFSymbolRef SymRef)
-  : Defined(DefinedRegularKind), File(F), Name(N), Sym(SymRef),
-    Chunk(File->Chunks[Sym.getSectionNumber() - 1]) {}
+DefinedRegular::DefinedRegular(ObjectFile *F, StringRef N, COFFSymbolRef S, Chunk *C)
+  : Defined(DefinedRegularKind), File(F), Name(N), Sym(S), Section(C) {}
 
 bool DefinedRegular::isCOMDAT() const {
-  return Chunk->isCOMDAT();
+  return Section->isCOMDAT();
 }
 
 uint64_t DefinedRegular::getRVA() {
-  return Chunk->getRVA() + Sym.getValue();
+  return Section->getRVA() + Sym.getValue();
 }
 
 uint64_t DefinedRegular::getFileOff() {
-  return Chunk->getFileOff() + Sym.getValue();
+  return Section->getFileOff() + Sym.getValue();
 }
 
 ErrorOr<std::unique_ptr<InputFile>> CanBeDefined::getMember() {
@@ -176,7 +175,7 @@ std::vector<Symbol *> ObjectFile::getSymbols() {
     } else if (Sref.getSectionNumber() == -1) {
       // absolute symbol
     } else {
-      P = new DefinedRegular(this, SymbolName, Sref);
+      P = new DefinedRegular(this, SymbolName, Sref, Chunks[Sref.getSectionNumber() - 1]);
     }
     if (P) {
       P->setSymbolRefAddress(&Symbols[I]);

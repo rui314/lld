@@ -39,10 +39,10 @@ const uint32_t PermMask = 0xF00000F0;
 
 class ArchiveFile;
 class Chunk;
+class Defined;
 class InputFile;
 class ObjectFile;
 class OutputSection;
-class Defined;
 struct SymbolRef;
 
 class Chunk {
@@ -168,7 +168,7 @@ public:
 
 class DefinedRegular : public Defined {
 public:
-  DefinedRegular(ObjectFile *F, StringRef N, COFFSymbolRef SymRef);
+  DefinedRegular(ObjectFile *File, StringRef Name, COFFSymbolRef Sym, Chunk *C);
 
   static bool classof(const Symbol *S) {
     return S->kind() == DefinedRegularKind;
@@ -184,7 +184,7 @@ private:
   ObjectFile *File;
   StringRef Name;
   COFFSymbolRef Sym;
-  Chunk *Chunk;
+  Chunk *Section;
 };
 
 class DefinedImportData : public Defined {
