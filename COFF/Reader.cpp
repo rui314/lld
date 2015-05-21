@@ -316,7 +316,7 @@ bool SectionChunk::isBSS() const {
   return Header->Characteristics & llvm::COFF::IMAGE_SCN_CNT_UNINITIALIZED_DATA;
 }
 
-uint32_t SectionChunk::getPermission() const {
+uint32_t SectionChunk::getPermissions() const {
   return Header->Characteristics & PermMask;
 }
 
@@ -332,7 +332,7 @@ size_t CommonChunk::getSize() const {
   return Sym.getValue();
 }
 
-uint32_t CommonChunk::getPermission() const {
+uint32_t CommonChunk::getPermissions() const {
   using namespace llvm::COFF;
   return IMAGE_SCN_CNT_UNINITIALIZED_DATA | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
 }
@@ -372,7 +372,7 @@ void OutputSection::addChunk(Chunk *C) {
     Header.SizeOfRawData = RoundUpToAlignment(Off, FileAlignment);
 }
 
-void OutputSection::addPermission(uint32_t C) {
+void OutputSection::addPermissions(uint32_t C) {
   Header.Characteristics = Header.Characteristics | (C & PermMask);
 }
 

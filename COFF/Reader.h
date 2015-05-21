@@ -61,7 +61,7 @@ public:
   virtual bool isBSS() const { return false; }
   virtual bool isCOMDAT() const { return false; }
   virtual bool isCommon() const { return false; }
-  virtual uint32_t getPermission() const { return 0; }
+  virtual uint32_t getPermissions() const { return 0; }
   virtual StringRef getSectionName() const { unimplemented(); }
 
   uint64_t getRVA() { return RVA; }
@@ -89,7 +89,7 @@ public:
   void applyRelocations(uint8_t *Buffer) override;
   bool isBSS() const override;
   bool isCOMDAT() const override;
-  uint32_t getPermission() const override;
+  uint32_t getPermissions() const override;
   StringRef getSectionName() const override { return SectionName; }
 
 private:
@@ -109,7 +109,7 @@ public:
   void applyRelocations(uint8_t *Buffer) override {}
   bool isBSS() const override { return true; }
   bool isCommon() const override { return true; }
-  uint32_t getPermission() const override;
+  uint32_t getPermissions() const override;
   StringRef getSectionName() const override { return ".bss"; }
 
 private:
@@ -396,8 +396,8 @@ public:
   std::vector<Chunk *> &getChunks() { return Chunks; }
 
   const llvm::object::coff_section *getHeader() { return &Header; }
-  void addPermission(uint32_t C);
-  uint32_t getPermission() { return Header.Characteristics & PermMask; }
+  void addPermissions(uint32_t C);
+  uint32_t getPermissions() { return Header.Characteristics & PermMask; }
   uint32_t getCharacteristics() { return Header.Characteristics; }
   uint64_t getRVA() { return Header.VirtualAddress; }
   uint64_t getFileOff() { return Header.PointerToRawData; }

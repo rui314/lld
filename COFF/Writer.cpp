@@ -49,7 +49,7 @@ void Writer::groupSections() {
     for (Chunk *C : Chunks) {
       C->setOutputSection(Sec.get());
       Sec->addChunk(C);
-      Sec->addPermission(C->getPermission());
+      Sec->addPermissions(C->getPermissions());
     }
     OutputSections.push_back(std::move(Sec));
   }
@@ -276,7 +276,7 @@ OutputSection *Writer::createSection(StringRef Name) {
     llvm_unreachable("unknown section name");
   }
   auto S = new OutputSection(Name, OutputSections.size());
-  S->addPermission(Perm);
+  S->addPermissions(Perm);
   OutputSections.push_back(std::unique_ptr<OutputSection>(S));
   return S;
 }
