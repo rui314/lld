@@ -20,12 +20,14 @@
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Option/Option.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
 #include "llvm/Support/raw_ostream.h"
 #include <memory>
+#include <mutex>
 #include <sstream>
 
 using namespace llvm;
@@ -58,11 +60,27 @@ static const llvm::opt::OptTable::Info infoTable[] = {
 };
 
 namespace {
+
 class COFFOptTable : public llvm::opt::OptTable {
 public:
   COFFOptTable()
     : OptTable(infoTable, llvm::array_lengthof(infoTable),
 	       /* ignoreCase */ true) {}
+};
+
+class BumpPtrStringSaver : public llvm::cl::StringSaver {
+public:
+  const char *SaveString(const char *S) override {
+    size_t Len = strlen(S);
+    std::lock_guard<std::mutex> Lock(AllocMutex);
+    char *Copy = Alloc.Allocate<char>(Len + 1);
+    memcpy(Copy, S, Len + 1);
+    return Copy;
+  }
+
+private:
+  llvm::BumpPtrAllocator Alloc;
+  std::mutex AllocMutex;
 };
 }
 
@@ -86,28 +104,88 @@ static std::vector<StringRef> splitPathList(StringRef str) {
   return ret;
 }
 
-static std::string findFile(StringRef Filename) {
+namespace lld {
+namespace coff {
+
+BumpPtrStringSaver StringSaver;
+
+std::string findLib(StringRef Filename) {
+  if (llvm::sys::fs::exists(Filename))
+    return Filename;
+  std::string Name;
+  if (Filename.endswith_lower(".lib")) {
+    Name = Filename;
+  } else {
+    Name = (Filename + ".lib").str();
+  }
+
+  llvm::Optional<std::string> Env = llvm::sys::Process::GetEnv("LIB");
+  if (!Env.hasValue())
+    return Filename;
+  for (StringRef Dir : splitPathList(*Env)) {
+    SmallString<128> Path = Dir;
+    llvm::sys::path::append(Path, Name);
+    if (llvm::sys::fs::exists(Path.str()))
+      return Path.str();
+  }
+  return Filename;
+}
+
+std::string findFile(StringRef Filename) {
   if (llvm::sys::fs::exists(Filename))
     return Filename;
   llvm::Optional<std::string> Env = llvm::sys::Process::GetEnv("LIB");
   if (!Env.hasValue())
-    return "";
+    return Filename;
   for (StringRef Dir : splitPathList(*Env)) {
     SmallString<128> Path = Dir;
     llvm::sys::path::append(Path, Filename);
     if (llvm::sys::fs::exists(Path.str()))
       return Path.str();
   }
-  return "";
+  return Filename;
 }
 
-namespace lld {
-namespace coff {
-
-static ErrorOr<std::unique_ptr<InputFile>> createFile(StringRef Path) {
+ErrorOr<std::unique_ptr<InputFile>> createFile(StringRef Path) {
   if (StringRef(Path).endswith_lower(".lib"))
     return ArchiveFile::create(Path);
   return ObjectFile::create(Path);
+}
+
+std::set<std::string> VisitedFiles;
+
+bool parseDirectives(StringRef S, std::vector<std::unique_ptr<InputFile>> *Res) {
+  SmallVector<const char *, 16> Tokens;
+  Tokens.push_back("link"); // argv[0] is the command name. Will be ignored.
+  llvm::cl::TokenizeWindowsCommandLine(S, StringSaver, Tokens);
+  Tokens.push_back(nullptr);
+  int Argc = Tokens.size() - 1;
+  const char **Argv = &Tokens[0];
+
+  COFFOptTable Table;
+  unsigned MissingIndex;
+  unsigned MissingCount;
+  std::unique_ptr<llvm::opt::InputArgList> Args(
+    Table.ParseArgs(&Argv[1], &Argv[Argc], MissingIndex, MissingCount));
+  if (MissingCount) {
+    llvm::errs() << "error: missing arg value for '"
+		 << Args->getArgString(MissingIndex) << "' expected "
+		 << MissingCount << " argument(s).\n";
+    return false;
+  }
+  for (auto *Arg : Args->filtered(OPT_defaultlib)) {
+    std::string Path = findLib(Arg->getValue());
+    if (VisitedFiles.count(StringRef(Path).lower()) > 0)
+      continue;
+    VisitedFiles.insert(StringRef(Path).lower());
+    ErrorOr<std::unique_ptr<InputFile>> FileOrErr = ArchiveFile::create(Path);
+    if (auto EC = FileOrErr.getError()) {
+      llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";
+      return false;
+    }
+    Res->push_back(std::move(FileOrErr.get()));
+  }
+  return true;
 }
 
 bool link(int Argc, const char *Argv[]) {
@@ -136,6 +214,9 @@ bool link(int Argc, const char *Argv[]) {
   SymbolTable Symtab;
   for (auto *Arg : Args->filtered(OPT_INPUT)) {
     std::string Path = findFile(Arg->getValue());
+    if (VisitedFiles.count(StringRef(Path).lower()) > 0)
+      continue;
+    VisitedFiles.insert(StringRef(Path).lower());
     ErrorOr<std::unique_ptr<InputFile>> FileOrErr = createFile(Path);
     if (auto EC = FileOrErr.getError()) {
       llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";

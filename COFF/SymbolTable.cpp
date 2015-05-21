@@ -16,6 +16,8 @@
 namespace lld {
 namespace coff {
 
+bool parseDirectives(StringRef S, std::vector<std::unique_ptr<InputFile>> *Res);
+
 SymbolTable::SymbolTable() {
   Symtab["__ImageBase"] = new SymbolRef(new DefinedAbsolute("__ImageBase", ImageBase));
   Symtab["mainCRTStartup"] = new SymbolRef(new Undefined("mainCRTStartup"));
@@ -45,6 +47,16 @@ std::error_code SymbolTable::addFile(ObjectFile *File) {
       Sym->setSymbolRef(new SymbolRef(Sym));
     }
   }
+
+  StringRef Dir = File->getDirectives();
+  if (!Dir.empty()) {
+    std::vector<std::unique_ptr<InputFile>> Libs;
+    if (!parseDirectives(Dir, &Libs))
+      return std::error_code();
+    for (std::unique_ptr<InputFile> &L : Libs)
+      addFile(std::move(L));
+  }
+  
   return std::error_code();
 }
 

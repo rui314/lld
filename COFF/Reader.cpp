@@ -145,8 +145,14 @@ ObjectFile::ObjectFile(StringRef N, std::unique_ptr<COFFObjectFile> F)
       llvm::errs() << "getSectionName failed: " << Name << ": " << EC.message() << "\n";
       return;
     }
-    if (Name.startswith(".debug") || Name == ".drectve")
+    if (Name.startswith(".debug"))
       continue;
+    if (Name == ".drectve") {
+      ArrayRef<uint8_t> Data;
+      COFFFile->getSectionContents(Sec, Data);
+      Directives = StringRef((char *)Data.data(), Data.size()).trim();
+      continue;
+    }
     Chunks[I] = new SectionChunk(this, Sec);
   }
 }

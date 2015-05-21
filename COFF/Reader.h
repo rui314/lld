@@ -343,6 +343,7 @@ public:
 
   StringRef getName() override { return Name; }
   std::vector<Symbol *> getSymbols() override;
+  StringRef getDirectives() { return Directives; }
 
   std::string Name;
   std::vector<SymbolRef *> Symbols;
@@ -353,6 +354,7 @@ private:
   ObjectFile(StringRef Name, std::unique_ptr<COFFObjectFile> File);
 
   std::unique_ptr<MemoryBuffer> MB;
+  StringRef Directives;
 };
 
 class ImplibFile : public InputFile {
