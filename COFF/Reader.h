@@ -10,6 +10,7 @@
 #ifndef LLD_COFF_SYMBOL_H
 #define LLD_COFF_SYMBOL_H
 
+#include "Allocator.h"
 #include "lld/Core/LLVM.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Object/Archive.h"
@@ -371,6 +372,7 @@ private:
 
   MemoryBufferRef MBRef;
   std::vector<Symbol *> Symbols;
+  StringAllocator Alloc;
 };
 
 class OutputSection {

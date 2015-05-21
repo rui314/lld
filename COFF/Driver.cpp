@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "Allocator.h"
 #include "Reader.h"
 #include "SymbolTable.h"
 #include "Writer.h"
@@ -71,17 +72,14 @@ public:
 class BumpPtrStringSaver : public llvm::cl::StringSaver {
 public:
   const char *SaveString(const char *S) override {
-    size_t Len = strlen(S);
-    std::lock_guard<std::mutex> Lock(AllocMutex);
-    char *Copy = Alloc.Allocate<char>(Len + 1);
-    memcpy(Copy, S, Len + 1);
-    return Copy;
+    StringRef Copy = Alloc.save(S);
+    return Copy.data();
   }
 
 private:
-  llvm::BumpPtrAllocator Alloc;
-  std::mutex AllocMutex;
+  lld::coff::StringAllocator Alloc;
 };
+
 }
 
 static std::string getOutputPath(llvm::opt::InputArgList *Args) {

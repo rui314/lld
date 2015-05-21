@@ -235,8 +235,8 @@ void ImplibFile::readImplib() {
     return;
   }
 
-  StringRef Name = *new std::string(StringRef(Buf + sizeof(ImportHeader)));
-  StringRef ImpName = *new std::string((Twine("__imp_") + Name).str());
+  StringRef Name = Alloc.save(StringRef(Buf + sizeof(ImportHeader)));
+  StringRef ImpName = Alloc.save(Twine("__imp_") + Name);
   StringRef DLLName(Buf + sizeof(ImportHeader) + Name.size() + 1);
   auto *ImpSym = new DefinedImportData(DLLName, ImpName, Name);
   Symbols.push_back(ImpSym);
