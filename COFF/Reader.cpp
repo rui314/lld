@@ -332,29 +332,20 @@ void SectionChunk::applyRelocation(uint8_t *Buffer, const coff_relocation *Rel) 
   auto *Sym = cast<Defined>(File->SymbolRefs[Rel->SymbolTableIndex]->Ptr);
   uint64_t S = Sym->getRVA();
   uint64_t P = getRVA() + Rel->VirtualAddress;
-  if (Rel->Type == IMAGE_REL_AMD64_ADDR32) {
-    add32(Off, ImageBase + S);
-  } else if (Rel->Type == IMAGE_REL_AMD64_ADDR64) {
-    add64(Off, ImageBase + S);
-  } else if (Rel->Type == IMAGE_REL_AMD64_ADDR32NB) {
-    add32(Off, S);
-  } else if (Rel->Type == IMAGE_REL_AMD64_REL32) {
-    add32(Off, S - P - 4);
-  } else if (Rel->Type == IMAGE_REL_AMD64_REL32_1) {
-    add32(Off, S - P - 5);
-  } else if (Rel->Type == IMAGE_REL_AMD64_REL32_2) {
-    add32(Off, S - P - 6);
-  } else if (Rel->Type == IMAGE_REL_AMD64_REL32_3) {
-    add32(Off, S - P - 7);
-  } else if (Rel->Type == IMAGE_REL_AMD64_REL32_4) {
-    add32(Off, S - P - 8);
-  } else if (Rel->Type == IMAGE_REL_AMD64_REL32_5) {
-    add32(Off, S - P - 9);
-  } else if (Rel->Type == IMAGE_REL_AMD64_SECTION) {
-    add16(Off, getOutputSection()->getSectionIndex());
-  } else if (Rel->Type == IMAGE_REL_AMD64_SECREL) {
-    add32(Off, S - getOutputSection()->getRVA());
-  } else {
+  OutputSection *Sec = getOutputSection();
+  switch (Rel->Type) {
+  case IMAGE_REL_AMD64_ADDR32:   add32(Off, ImageBase + S); break;
+  case IMAGE_REL_AMD64_ADDR64:   add64(Off, ImageBase + S); break;
+  case IMAGE_REL_AMD64_ADDR32NB: add32(Off, S); break;
+  case IMAGE_REL_AMD64_REL32:    add32(Off, S - P - 4); break;
+  case IMAGE_REL_AMD64_REL32_1:  add32(Off, S - P - 5); break;
+  case IMAGE_REL_AMD64_REL32_2:  add32(Off, S - P - 6); break;
+  case IMAGE_REL_AMD64_REL32_3:  add32(Off, S - P - 7); break;
+  case IMAGE_REL_AMD64_REL32_4:  add32(Off, S - P - 8); break;
+  case IMAGE_REL_AMD64_REL32_5:  add32(Off, S - P - 9); break;
+  case IMAGE_REL_AMD64_SECTION:  add16(Off, Sec->getSectionIndex()); break;
+  case IMAGE_REL_AMD64_SECREL:   add32(Off, S - Sec->getRVA()); break;
+  default:
     llvm::report_fatal_error("Unsupported relocation type");
   }
 }
