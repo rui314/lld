@@ -100,7 +100,7 @@ std::error_code SymbolTable::resolve(Symbol *Sym, SymbolRef **RefP) {
   SymbolRef *Ref = It->second;
 
   // RefP is not significant in this function. It's here to reduce the
-  // number of hash table lookup in the caller.
+  // number of hash table lookups in the caller.
   if (RefP)
     *RefP = Ref;
 
@@ -182,6 +182,8 @@ std::error_code SymbolTable::addMemberFile(CanBeDefined *Sym) {
   // read from the library.
   if (!File)
     return std::error_code();
+  File->setParentName(Sym->File->Name);
+  llvm::dbgs() << "Loaded " << File->getShortName() << " for " << Sym->getName() << "\n";
   return addFile(std::move(File));
 }
 

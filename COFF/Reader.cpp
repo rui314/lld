@@ -73,6 +73,20 @@ ErrorOr<std::unique_ptr<InputFile>> CanBeDefined::getMember() {
   return std::move(FileOrErr.get());
 }
 
+static StringRef basename(StringRef Path) {
+  size_t Pos = Path.rfind('\\');
+  if (Pos == StringRef::npos)
+    return Path;
+  return Path.substr(Pos + 1);
+}
+
+std::string InputFile::getShortName() {
+  StringRef Name = getName();
+  if (ParentName == "")
+    return Name;
+  return (basename(Name) + "(" + basename(ParentName) + ")").str();
+}
+
 ErrorOr<std::unique_ptr<ArchiveFile>> ArchiveFile::create(StringRef Path) {
   auto MBOrErr = MemoryBuffer::getFile(Path);
   if (auto EC = MBOrErr.getError())
@@ -182,7 +196,7 @@ void ObjectFile::initializeSymbols() {
     }
 
     std::unique_ptr<Symbol> Sym;
-    if (Sref.isUndefined() || Sref.isWeakExternal()) {
+    if (Sref.isUndefined()) {
       Sym.reset(new Undefined(SymbolName));
     } else if (Sref.isCommon()) {
       Chunk *C = new CommonChunk(Sref);
@@ -359,7 +373,7 @@ void SectionChunk::printDiscardMessage() {
     StringRef SymbolName;
     File->COFFFile->getSymbolName(Sym, SymbolName);
     llvm::dbgs() << "Discarded " << SymbolName << " from "
-                 << File->getName() << "\n";
+                 << File->getShortName() << "\n";
     I += Sym.getNumberOfAuxSymbols();
   }
 }

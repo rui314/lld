@@ -297,8 +297,9 @@ public:
 
   ErrorOr<std::unique_ptr<InputFile>> getMember();
 
-private:
   ArchiveFile *File;
+
+private:
   const Archive::Symbol Sym;
 };
 
@@ -326,11 +327,15 @@ public:
   virtual StringRef getName() = 0;
   virtual std::vector<std::unique_ptr<Symbol>> &getSymbols() = 0;
 
+  std::string getShortName();
+  void setParentName(StringRef N) { ParentName = N; }
+
 protected:
   InputFile(Kind K) : FileKind(K) {}
 
 private:
   const Kind FileKind;
+  StringRef ParentName;
 };
 
 class ArchiveFile : public InputFile {
