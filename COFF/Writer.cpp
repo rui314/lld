@@ -35,15 +35,19 @@ void Writer::markChunks() {
     for (std::unique_ptr<Chunk> &C : File->Chunks)
       if (C && C->isRoot())
         C->markLive();
-
   cast<Defined>(Symtab->find("mainCRTStartup"))->markLive();
+
+  for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
+    for (std::unique_ptr<Chunk> &C : File->Chunks)
+      if (C && !C->isLive())
+        C->printDiscardMessage();
 }
 
 void Writer::groupSections() {
   std::map<StringRef, std::vector<Chunk *>> Map;
   for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
     for (std::unique_ptr<Chunk> &C : File->Chunks)
-      if (C && C->isLive())
+      if (C)
         Map[dropDollar(C->getSectionName())].push_back(C.get());
 
   auto comp = [](Chunk *A, Chunk *B) {

@@ -63,6 +63,7 @@ public:
   virtual bool isCommon() const { return false; }
   virtual uint32_t getPermissions() const { return 0; }
   virtual StringRef getSectionName() const { unimplemented(); }
+  virtual void printDiscardMessage() { unimplemented(); }
 
   virtual bool isRoot() { return false; }
   virtual bool isLive() { return true; }
@@ -87,7 +88,8 @@ private:
 
 class SectionChunk : public Chunk {
 public:
-  SectionChunk(ObjectFile *File, const coff_section *Header);
+  SectionChunk(ObjectFile *File, const coff_section *Header,
+               uint32_t SectionIndex);
   const uint8_t *getData() const override;
   size_t getSize() const override;
   void applyRelocations(uint8_t *Buffer) override;
@@ -95,6 +97,7 @@ public:
   bool isCOMDAT() const override;
   uint32_t getPermissions() const override;
   StringRef getSectionName() const override { return SectionName; }
+  void printDiscardMessage() override;
 
   bool isRoot() override;
   void markLive() override;
@@ -105,6 +108,7 @@ private:
 
   ObjectFile *File;
   const coff_section *Header;
+  uint32_t SectionIndex;
   StringRef SectionName;
   ArrayRef<uint8_t> Data;
   bool Live = false;

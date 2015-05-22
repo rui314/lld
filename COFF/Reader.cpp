@@ -158,7 +158,7 @@ void ObjectFile::initializeChunks() {
       Directives = StringRef((char *)Data.data(), Data.size()).trim();
       continue;
     }
-    Chunks[I].reset(new SectionChunk(this, Sec));
+    Chunks[I].reset(new SectionChunk(this, Sec, I));
   }
 }
 
@@ -182,7 +182,7 @@ void ObjectFile::initializeSymbols() {
     }
 
     std::unique_ptr<Symbol> Sym;
-    if (Sref.isUndefined()) {
+    if (Sref.isUndefined() || Sref.isWeakExternal()) {
       Sym.reset(new Undefined(SymbolName));
     } else if (Sref.isCommon()) {
       Chunk *C = new CommonChunk(Sref);
@@ -250,8 +250,8 @@ void ImplibFile::readImplib() {
     Symbols.push_back(llvm::make_unique<DefinedImportFunc>(Name, ImpSym));
 }
 
-SectionChunk::SectionChunk(ObjectFile *F, const coff_section *H)
-    : File(F), Header(H) {
+SectionChunk::SectionChunk(ObjectFile *F, const coff_section *H, uint32_t SI)
+    : File(F), Header(H), SectionIndex(SI) {
   File->COFFFile->getSectionName(Header, SectionName);
   if (!isBSS())
     File->COFFFile->getSectionContents(Header, Data);
@@ -277,6 +277,7 @@ void SectionChunk::markLive() {
   COFFObjectFile *FP = File->COFFFile.get();
   for (const auto &I : SectionRef(Ref, FP).relocations()) {
     const coff_relocation *Rel = FP->getCOFFRelocation(I);
+    assert(File->SymbolRefs[Rel->SymbolTableIndex]);
     auto *S = cast<Defined>(File->SymbolRefs[Rel->SymbolTableIndex]->Ptr);
     S->markLive();
   }
@@ -344,6 +345,23 @@ size_t SectionChunk::getSize() const {
 
 bool SectionChunk::isCOMDAT() const {
   return Header->Characteristics & llvm::COFF::IMAGE_SCN_LNK_COMDAT;
+}
+
+void SectionChunk::printDiscardMessage() {
+  uint32_t E = File->COFFFile->getNumberOfSymbols();
+  for (uint32_t I = 0; I < E; ++I) {
+    auto SrefOrErr = File->COFFFile->getSymbol(I);
+    COFFSymbolRef Sym = SrefOrErr.get();
+    if (Sym.getSectionNumber() != SectionIndex)
+      continue;
+    if (!Sym.isFunctionDefinition())
+      continue;
+    StringRef SymbolName;
+    File->COFFFile->getSymbolName(Sym, SymbolName);
+    llvm::dbgs() << "Discarded " << SymbolName << " from "
+                 << File->getName() << "\n";
+    I += Sym.getNumberOfAuxSymbols();
+  }
 }
 
 size_t CommonChunk::getSize() const {
