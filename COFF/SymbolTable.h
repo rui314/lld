@@ -32,12 +32,12 @@ public:
   Symbol *find(StringRef Name);
   void dump();
 
-  std::vector<std::unique_ptr<ImplibFile>> ImplibFiles;
+  std::vector<std::unique_ptr<ImportFile>> ImportFiles;
 
 private:
   std::error_code addFile(ObjectFile *File);
   std::error_code addFile(ArchiveFile *File);
-  std::error_code addFile(ImplibFile *File);
+  std::error_code addFile(ImportFile *File);
 
   std::error_code resolve(Symbol *Sym, SymbolRef **Ref);
   std::error_code addMemberFile(CanBeDefined *Sym);

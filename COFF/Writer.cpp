@@ -73,7 +73,7 @@ void Writer::groupSections() {
 std::map<StringRef, std::vector<DefinedImportData *>> Writer::groupImports() {
   std::map<StringRef, std::vector<DefinedImportData *>> Ret;
   OutputSection *Text = createSection(".text");
-  for (std::unique_ptr<ImplibFile> &P : Symtab->ImplibFiles) {
+  for (std::unique_ptr<ImportFile> &P : Symtab->ImportFiles) {
     for (std::unique_ptr<Symbol> &S : P->getSymbols()) {
       if (auto *Sym = dyn_cast<DefinedImportData>(S.get())) {
         Ret[Sym->getDLLName()].push_back(Sym);
@@ -95,7 +95,7 @@ std::map<StringRef, std::vector<DefinedImportData *>> Writer::groupImports() {
 }
 
 void Writer::createImportTables() {
-  if (Symtab->ImplibFiles.empty())
+  if (Symtab->ImportFiles.empty())
     return;
 
   std::vector<ImportTable> Tabs;
@@ -137,7 +137,7 @@ void Writer::createImportTables() {
   for (ImportTable &T : Tabs)
     Idata->addChunk(T.DLLName);
 
-  // Claim ownership.
+  // Claim ownership of all chuns in the .idata section.
   for (size_t I = NumChunks, E = Idata->getChunks().size(); I < E; ++I)
     Chunks.push_back(std::unique_ptr<Chunk>(Idata->getChunks()[I]));
 }

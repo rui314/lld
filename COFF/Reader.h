@@ -395,9 +395,9 @@ private:
   StringRef Directives;
 };
 
-class ImplibFile : public InputFile {
+class ImportFile : public InputFile {
 public:
-  ImplibFile(MemoryBufferRef M);
+  ImportFile(MemoryBufferRef M);
 
   static bool classof(const InputFile *F) { return F->kind() == ImplibKind; }
 

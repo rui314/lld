@@ -33,7 +33,7 @@ std::error_code SymbolTable::addFile(std::unique_ptr<InputFile> File) {
     return addFile(F);
   if (auto *F = dyn_cast<ArchiveFile>(P))
     return addFile(F);
-  if (auto *F = dyn_cast<ImplibFile>(P))
+  if (auto *F = dyn_cast<ImportFile>(P))
     return addFile(F);
   llvm_unreachable("unknown file type");
 }
@@ -73,8 +73,8 @@ std::error_code SymbolTable::addFile(ArchiveFile *File) {
   return std::error_code();
 }
 
-std::error_code SymbolTable::addFile(ImplibFile *File) {
-  ImplibFiles.emplace_back(File);
+std::error_code SymbolTable::addFile(ImportFile *File) {
+  ImportFiles.emplace_back(File);
   for (std::unique_ptr<Symbol> &Sym : File->getSymbols())
     if (auto EC = resolve(Sym.get(), nullptr))
       return EC;

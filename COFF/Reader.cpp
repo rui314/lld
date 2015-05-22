@@ -61,7 +61,7 @@ ErrorOr<std::unique_ptr<InputFile>> CanBeDefined::getMember() {
 
   file_magic Magic = identify_magic(StringRef(MBRef.getBuffer()));
   if (Magic == file_magic::coff_import_library)
-    return llvm::make_unique<ImplibFile>(MBRef);
+    return llvm::make_unique<ImportFile>(MBRef);
 
   if (Magic != file_magic::coff_object)
     return make_dynamic_error_code("unknown file type");
@@ -245,16 +245,16 @@ ObjectFile::create(StringRef Path, MemoryBufferRef MBRef) {
   return std::move(File);
 }
 
-StringRef ImplibFile::getName() {
+StringRef ImportFile::getName() {
   return MBRef.getBufferIdentifier();
 }
 
-ImplibFile::ImplibFile(MemoryBufferRef M)
+ImportFile::ImportFile(MemoryBufferRef M)
     : InputFile(ImplibKind), MBRef(M) {
   readImplib();
 }
 
-void ImplibFile::readImplib() {
+void ImportFile::readImplib() {
   const char *Buf = MBRef.getBufferStart();
   const char *End = MBRef.getBufferEnd();
 
