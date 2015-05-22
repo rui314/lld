@@ -97,10 +97,9 @@ bool SymbolTable::reportRemainingUndefines() {
 // types.
 std::error_code SymbolTable::resolve(Symbol *Sym, SymbolRef **RefP) {
   StringRef Name = Sym->getName();
-  auto It = Symtab.find(Name);
-  if (It == Symtab.end())
-    It = Symtab.insert(It, std::make_pair(Name, new (Alloc) SymbolRef()));
-  SymbolRef *Ref = It->second;
+  auto *NewVal = new (Alloc) SymbolRef();
+  auto Res = Symtab.insert(std::make_pair(Name, NewVal));
+  SymbolRef *Ref = Res.second ? NewVal : Res.first->second;
 
   // RefP is not significant in this function. It's here to reduce the
   // number of hash table lookups in the caller.

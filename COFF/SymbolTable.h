@@ -12,6 +12,7 @@
 
 #include "Reader.h"
 #include "llvm/Support/Allocator.h"
+#include <unordered_map>
 
 namespace lld {
 namespace coff {
@@ -42,7 +43,8 @@ private:
 
   std::vector<std::unique_ptr<ObjectFile>> ObjectFiles;
   std::vector<std::unique_ptr<ArchiveFile>> ArchiveFiles;
-  std::map<llvm::StringRef, SymbolRef *> Symtab;
+
+  std::unordered_map<llvm::StringRef, SymbolRef *> Symtab;
 
   void addInitialSymbol(Symbol *Sym);
 
