@@ -203,7 +203,8 @@ void ObjectFile::initializeSymbols() {
       Chunks.push_back(std::unique_ptr<Chunk>(C));
       Sym.reset(new DefinedRegular(this, SymbolName, Sref, C));
     } else if (Sref.getSectionNumber() == -1) {
-      // absolute symbol
+      if (SymbolName != "@comp.id" && SymbolName != "@feat.00")
+        Sym.reset(new DefinedAbsolute(SymbolName, Sref.getValue()));
     } else {
       if (std::unique_ptr<Chunk> &C = Chunks[Sref.getSectionNumber()])
         Sym.reset(new DefinedRegular(this, SymbolName, Sref, C.get()));
