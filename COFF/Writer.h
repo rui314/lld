@@ -30,7 +30,7 @@ const int HeaderSize = DOSStubSize + sizeof(llvm::COFF::PEMagic)
 class Writer {
 public:
   explicit Writer(SymbolTable *T) : Symtab(T) {}
-  void write(StringRef Path);
+  std::error_code write(StringRef Path);
 
 private:
   void markChunks();
@@ -38,7 +38,7 @@ private:
   void createImportTables();
   void assignAddresses();
   void removeEmptySections();
-  void openFile(StringRef OutputPath);
+  std::error_code openFile(StringRef OutputPath);
   void writeHeader();
   void writeSections();
   void applyRelocations();

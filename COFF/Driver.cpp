@@ -214,7 +214,10 @@ bool link(int Argc, const char *Argv[]) {
     return false;
 
   Writer OutFile(&Symtab);
-  OutFile.write(getOutputPath(Args.get()));
+  if (auto EC = OutFile.write(getOutputPath(Args.get()))) {
+    llvm::errs() << EC.message() << "\n";
+    return false;
+  }
   return true;
 }
 

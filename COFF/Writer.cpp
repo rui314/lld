@@ -11,6 +11,7 @@
 #include "ImportTable.h"
 #include "Reader.h"
 #include "Writer.h"
+#include "lld/Core/Error.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/STLExtras.h"
@@ -245,19 +246,18 @@ void Writer::writeHeader() {
     HeaderSize + sizeof(coff_section) * OutputSections.size(), FileAlignment);
 }
 
-void Writer::openFile(StringRef OutputPath) {
+std::error_code Writer::openFile(StringRef Path) {
   uint64_t Size = EndOfSectionTable + SectionTotalSizeDisk;
   if (auto EC = FileOutputBuffer::create(
-        OutputPath, Size, Buffer, FileOutputBuffer::F_executable)) {
-    llvm::errs() << "Failed to open " << OutputPath
-                 << ": " << EC.message() << "\n";
-  }
+        Path, Size, Buffer, FileOutputBuffer::F_executable))
+    return make_dynamic_error_code(Twine("Failed to open ") + Path + ": " + EC.message());
+  return std::error_code();
 }
 
 void Writer::writeSections() {
   uint8_t *P = Buffer->getBufferStart();
   for (std::unique_ptr<OutputSection> &Sec : OutputSections) {
-    if (Sec->getName() == ".text")
+    if (Sec->getPermissions() & llvm::COFF::IMAGE_SCN_CNT_CODE)
       memset(P + Sec->getFileOff(), 0xCC, Sec->getRawSize());
     for (Chunk *C : Sec->getChunks())
       if (!C->isBSS())
@@ -302,17 +302,20 @@ void Writer::applyRelocations() {
       C->applyRelocations(Buf);
 }
 
-void Writer::write(StringRef OutputPath) {
+std::error_code Writer::write(StringRef OutputPath) {
   markChunks();
   groupSections();
   createImportTables();
   assignAddresses();
   removeEmptySections();
-  openFile(OutputPath);
+  if (auto EC = openFile(OutputPath))
+    return EC;
   writeHeader();
   writeSections();
   applyRelocations();
-  Buffer->commit();
+  if (auto EC = Buffer->commit())
+    return EC;
+  return std::error_code();
 }
 
 } // namespace coff
