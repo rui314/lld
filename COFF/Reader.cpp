@@ -171,14 +171,16 @@ void ObjectFile::initializeChunks() {
       llvm::errs() << "getSectionName failed: " << Name << ": " << EC.message() << "\n";
       return;
     }
-    if (Name.startswith(".debug"))
-      continue;
     if (Name == ".drectve") {
       ArrayRef<uint8_t> Data;
       COFFFile->getSectionContents(Sec, Data);
       Directives = StringRef((char *)Data.data(), Data.size()).trim();
       continue;
     }
+    if (Name.startswith(".debug"))
+      continue;
+    if (Sec->Characteristics & llvm::COFF::IMAGE_SCN_LNK_REMOVE)
+      continue;
     Chunks[I].reset(new SectionChunk(this, Sec, I));
   }
 }
