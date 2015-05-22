@@ -172,9 +172,8 @@ std::error_code parseDirectives(StringRef S,
 
   for (auto *Arg : Args->filtered(OPT_defaultlib)) {
     std::string Path = findLib(Arg->getValue());
-    if (Config->VisitedFiles.count(StringRef(Path).lower()) > 0)
+    if (!Config->insertFile(Path))
       continue;
-    Config->VisitedFiles.insert(StringRef(Path).lower());
     ErrorOr<std::unique_ptr<InputFile>> FileOrErr = ArchiveFile::create(Path);
     if (auto EC = FileOrErr.getError())
       return EC;
@@ -198,9 +197,9 @@ bool link(int Argc, const char *Argv[]) {
   SymbolTable Symtab;
   for (auto *Arg : Args->filtered(OPT_INPUT)) {
     std::string Path = findFile(Arg->getValue());
-    if (Config->VisitedFiles.count(StringRef(Path).lower()) > 0)
+    if (!Config->insertFile(Path))
       continue;
-    Config->VisitedFiles.insert(StringRef(Path).lower());
+
     ErrorOr<std::unique_ptr<InputFile>> FileOrErr = createFile(Path);
     if (auto EC = FileOrErr.getError()) {
       llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";

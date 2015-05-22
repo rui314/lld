@@ -10,13 +10,21 @@
 #ifndef LLD_COFF_CONFIG_H
 #define LLD_COFF_CONFIG_H
 
+#include "llvm/ADT/StringRef.h"
 #include <set>
 
 namespace lld {
 namespace coff {
 
-struct Configuration {
+class Configuration {
+public:
   bool Verbose = false;
+
+  bool insertFile(llvm::StringRef Path) {
+    return VisitedFiles.insert(Path.lower()).second;
+  }
+
+private:
   std::set<std::string> VisitedFiles;
 };
 
