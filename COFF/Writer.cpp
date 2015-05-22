@@ -12,12 +12,14 @@
 #include "Reader.h"
 #include "Writer.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/FileOutputBuffer.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
+#include <functional>
 #include <map>
 #include <utility>
 
@@ -27,35 +29,37 @@ using namespace llvm::object;
 namespace lld {
 namespace coff {
 
-StringRef dropDollar(StringRef S) {
+static StringRef dropDollar(StringRef S) {
   return S.substr(0, S.find('$'));
 }
 
-void Writer::markChunks() {
+static void forEachChunk(SymbolTable *Symtab, std::function<void(Chunk *)> F) {
   for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
     for (std::unique_ptr<Chunk> &C : File->Chunks)
-      if (C && C->isRoot())
-        C->markLive();
+      if (C)
+        F(C.get());
+}
+
+void Writer::markChunks() {
+  forEachChunk(Symtab, [](Chunk *C) { if (C->isRoot()) C->markLive(); });
   cast<Defined>(Symtab->find("mainCRTStartup"))->markLive();
 
-  if (Config->Verbose)
-    for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
-      for (std::unique_ptr<Chunk> &C : File->Chunks)
-        if (C && !C->isLive())
-          C->printDiscardMessage();
+  if (Config->Verbose) {
+    auto F = [](Chunk *C) { if (!C->isLive()) C->printDiscardMessage(); };
+    forEachChunk(Symtab, F);
+  }
 }
 
 void Writer::groupSections() {
   std::map<StringRef, std::vector<Chunk *>> Map;
-  for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
-    for (std::unique_ptr<Chunk> &C : File->Chunks)
-      if (C)
-        Map[dropDollar(C->getSectionName())].push_back(C.get());
+  auto Push = [&](Chunk *C) {
+    Map[dropDollar(C->getSectionName())].push_back(C);
+  };
+  forEachChunk(Symtab, Push);
 
   auto comp = [](Chunk *A, Chunk *B) {
     return A->getSectionName() < B->getSectionName();
   };
-
   for (auto &P : Map) {
     StringRef SectionName = P.first;
     std::vector<Chunk *> &Chunks = P.second;
@@ -89,7 +93,7 @@ std::map<StringRef, std::vector<DefinedImportData *>> Writer::groupImports() {
   };
   for (auto &P : Ret) {
     std::vector<DefinedImportData *> &V = P.second;
-    std::stable_sort(V.begin(), V.end(), comp);
+    std::sort(V.begin(), V.end(), comp);
   }
   return Ret;
 }
@@ -126,7 +130,7 @@ void Writer::createImportTables() {
       Idata->addChunk(C);
     Idata->addChunk(new NullChunk(8));
   }
-  IAT = Tabs[0].AddressTables[0];
+  ImportAddressTable = Tabs[0].AddressTables[0];
 
   // Add the hint name table.
   for (ImportTable &T : Tabs)
@@ -137,7 +141,7 @@ void Writer::createImportTables() {
   for (ImportTable &T : Tabs)
     Idata->addChunk(T.DLLName);
 
-  // Claim ownership of all chuns in the .idata section.
+  // Claim ownership of all chunks in the .idata section.
   for (size_t I = NumChunks, E = Idata->getChunks().size(); I < E; ++I)
     Chunks.push_back(std::unique_ptr<Chunk>(Idata->getChunks()[I]));
 }
@@ -237,10 +241,10 @@ void Writer::writeSections() {
   for (std::unique_ptr<OutputSection> &Out : OutputSections)
     SectionTable[Idx++] = *Out->getHeader();
   uint8_t *P = Buffer->getBufferStart();
-  for (std::unique_ptr<OutputSection> &OSec : OutputSections) {
-    if (OSec->getName() == ".text")
-      memset(P + OSec->getFileOff(), 0xCC, OSec->getRawSize());
-    for (Chunk *C : OSec->getChunks())
+  for (std::unique_ptr<OutputSection> &Sec : OutputSections) {
+    if (Sec->getName() == ".text")
+      memset(P + Sec->getFileOff(), 0xCC, Sec->getRawSize());
+    for (Chunk *C : Sec->getChunks())
       if (!C->isBSS())
         memcpy(P + C->getFileOff(), C->getData(), C->getSize());
   }
@@ -258,10 +262,11 @@ void Writer::backfillHeaders() {
     PE->SizeOfInitializedData = Data->getRawSize();
   }
   if (OutputSection *Idata = findSection(".idata")) {
-    DataDirectory[COFF::IMPORT_TABLE].RelativeVirtualAddress = Idata->getRVA();
-    DataDirectory[COFF::IMPORT_TABLE].Size = Idata->getVirtualSize();
-    DataDirectory[COFF::IAT].RelativeVirtualAddress = IAT->getRVA();
-    DataDirectory[COFF::IAT].Size = IAT->getSize();
+    using namespace llvm::COFF;
+    DataDirectory[IMPORT_TABLE].RelativeVirtualAddress = Idata->getRVA();
+    DataDirectory[IMPORT_TABLE].Size = Idata->getVirtualSize();
+    DataDirectory[IAT].RelativeVirtualAddress = ImportAddressTable->getRVA();
+    DataDirectory[IAT].Size = ImportAddressTable->getSize();
   }
 }
 
@@ -276,20 +281,19 @@ OutputSection *Writer::createSection(StringRef Name) {
   using namespace llvm::COFF;
   if (auto *S = findSection(Name))
     return S;
-  uint32_t Perm = 0;
-  if (Name == ".text") {
-    Perm = IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_EXECUTE;
-  } else if (Name == ".idata") {
-    Perm = IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ;
-  } else if (Name == ".rdata") {
-    Perm = IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ;
-  } else if (Name == ".data") {
-    Perm = IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
-  } else if (Name == ".bss") {
-    Perm = IMAGE_SCN_CNT_UNINITIALIZED_DATA | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
-  } else {
+
+  const auto Read = IMAGE_SCN_MEM_READ;
+  const auto Write = IMAGE_SCN_MEM_WRITE;
+  const auto Execute = IMAGE_SCN_MEM_EXECUTE;
+  uint32_t Perm = StringSwitch<uint32_t>(Name)
+    .Case(".bss", IMAGE_SCN_CNT_UNINITIALIZED_DATA | Read | Write)
+    .Case(".data", IMAGE_SCN_CNT_INITIALIZED_DATA | Read | Write)
+    .Case(".idata", IMAGE_SCN_CNT_INITIALIZED_DATA | Read)
+    .Case(".rdata", IMAGE_SCN_CNT_INITIALIZED_DATA | Read)
+    .Case(".text", IMAGE_SCN_CNT_CODE | Read | Execute)
+    .Default(0);
+  if (!Perm)
     llvm_unreachable("unknown section name");
-  }
   auto S = new OutputSection(Name, OutputSections.size());
   S->addPermissions(Perm);
   OutputSections.push_back(std::unique_ptr<OutputSection>(S));
