@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "Config.h"
 #include "SymbolTable.h"
 #include "lld/Core/Error.h"
 #include "llvm/ADT/STLExtras.h"
@@ -185,7 +186,8 @@ std::error_code SymbolTable::addMemberFile(CanBeDefined *Sym) {
   if (!File)
     return std::error_code();
   File->setParentName(Sym->File->Name);
-  llvm::dbgs() << "Loaded " << File->getShortName() << " for " << Sym->getName() << "\n";
+  if (Config.Verbose)
+    llvm::dbgs() << "Loaded " << File->getShortName() << " for " << Sym->getName() << "\n";
   return addFile(std::move(File));
 }
 

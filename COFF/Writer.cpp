@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "Config.h"
 #include "ImportTable.h"
 #include "Reader.h"
 #include "Writer.h"
@@ -37,10 +38,11 @@ void Writer::markChunks() {
         C->markLive();
   cast<Defined>(Symtab->find("mainCRTStartup"))->markLive();
 
-  for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
-    for (std::unique_ptr<Chunk> &C : File->Chunks)
-      if (C && !C->isLive())
-        C->printDiscardMessage();
+  if (Config.Verbose)
+    for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
+      for (std::unique_ptr<Chunk> &C : File->Chunks)
+        if (C && !C->isLive())
+          C->printDiscardMessage();
 }
 
 void Writer::groupSections() {
@@ -312,7 +314,6 @@ void Writer::write(StringRef OutputPath) {
   writeSections();
   applyRelocations();
   backfillHeaders();
-  // Symtab->dump();
   Buffer->commit();
 }
 

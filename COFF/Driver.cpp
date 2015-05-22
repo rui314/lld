@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Allocator.h"
+#include "Config.h"
 #include "Reader.h"
 #include "SymbolTable.h"
 #include "Writer.h"
@@ -127,6 +128,7 @@ parseArgs(int Argc, const char *Argv[]) {
 namespace lld {
 namespace coff {
 
+Configuration Config;
 BumpPtrStringSaver StringSaver;
 
 std::string findLib(StringRef Filename) {
@@ -208,6 +210,9 @@ bool link(int Argc, const char *Argv[]) {
     return false;
   }
   std::unique_ptr<llvm::opt::InputArgList> Args = std::move(ArgsOrErr.get());
+
+  if (Args->hasArg(OPT_verbose))
+    Config.Verbose = true;
 
   SymbolTable Symtab;
   for (auto *Arg : Args->filtered(OPT_INPUT)) {
