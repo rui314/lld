@@ -211,18 +211,36 @@ void Writer::writeHeader() {
   PE->MajorSubsystemVersion = 6;
   PE->Subsystem = llvm::COFF::IMAGE_SUBSYSTEM_WINDOWS_CUI;
   PE->SizeOfImage = EndOfSectionTable + SectionTotalSizeMemory;
+  uint64_t Entry = cast<Defined>(Symtab->find("mainCRTStartup"))->getRVA();
+  PE->AddressOfEntryPoint = Entry;
   PE->SizeOfStackReserve = 1024 * 1024;
   PE->SizeOfStackCommit = 4096;
   PE->SizeOfHeapReserve = 1024 * 1024;
   PE->SizeOfHeapCommit = 4096;
   PE->NumberOfRvaAndSize = NumberfOfDataDirectory;
+  if (OutputSection *Text = findSection(".text")) {
+    PE->BaseOfCode = Text->getRVA();
+    PE->SizeOfCode = Text->getRawSize();
+  }
+  if (OutputSection *Data = findSection(".data"))
+    PE->SizeOfInitializedData = Data->getRawSize();
 
   // Write data directory
   DataDirectory = reinterpret_cast<data_directory *>(P);
   P += sizeof(data_directory) * NumberfOfDataDirectory;
+  if (OutputSection *Idata = findSection(".idata")) {
+    using namespace llvm::COFF;
+    DataDirectory[IMPORT_TABLE].RelativeVirtualAddress = Idata->getRVA();
+    DataDirectory[IMPORT_TABLE].Size = Idata->getVirtualSize();
+    DataDirectory[IAT].RelativeVirtualAddress = ImportAddressTable->getRVA();
+    DataDirectory[IAT].Size = ImportAddressTable->getSize();
+  }
 
-  // Initialize SectionTable pointer
+  // The section table immediately follows the data directory.
   SectionTable = reinterpret_cast<coff_section *>(P);
+  int Idx = 0;
+  for (std::unique_ptr<OutputSection> &Out : OutputSections)
+    SectionTable[Idx++] = *Out->getHeader();
   PE->SizeOfHeaders = RoundUpToAlignment(
     HeaderSize + sizeof(coff_section) * OutputSections.size(), FileAlignment);
 }
@@ -237,9 +255,6 @@ void Writer::openFile(StringRef OutputPath) {
 }
 
 void Writer::writeSections() {
-  int Idx = 0;
-  for (std::unique_ptr<OutputSection> &Out : OutputSections)
-    SectionTable[Idx++] = *Out->getHeader();
   uint8_t *P = Buffer->getBufferStart();
   for (std::unique_ptr<OutputSection> &Sec : OutputSections) {
     if (Sec->getName() == ".text")
@@ -247,26 +262,6 @@ void Writer::writeSections() {
     for (Chunk *C : Sec->getChunks())
       if (!C->isBSS())
         memcpy(P + C->getFileOff(), C->getData(), C->getSize());
-  }
-}
-
-void Writer::backfillHeaders() {
-  uint64_t Entry = cast<Defined>(Symtab->find("mainCRTStartup"))->getRVA();
-  assert(Entry);
-  PE->AddressOfEntryPoint = Entry;
-  if (OutputSection *Text = findSection(".text")) {
-    PE->BaseOfCode = Text->getRVA();
-    PE->SizeOfCode = Text->getRawSize();
-  }
-  if (OutputSection *Data = findSection(".data")) {
-    PE->SizeOfInitializedData = Data->getRawSize();
-  }
-  if (OutputSection *Idata = findSection(".idata")) {
-    using namespace llvm::COFF;
-    DataDirectory[IMPORT_TABLE].RelativeVirtualAddress = Idata->getRVA();
-    DataDirectory[IMPORT_TABLE].Size = Idata->getVirtualSize();
-    DataDirectory[IAT].RelativeVirtualAddress = ImportAddressTable->getRVA();
-    DataDirectory[IAT].Size = ImportAddressTable->getSize();
   }
 }
 
@@ -317,7 +312,6 @@ void Writer::write(StringRef OutputPath) {
   writeHeader();
   writeSections();
   applyRelocations();
-  backfillHeaders();
   Buffer->commit();
 }
 

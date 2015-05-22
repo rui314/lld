@@ -42,7 +42,6 @@ private:
   void writeHeader();
   void writeSections();
   void applyRelocations();
-  void backfillHeaders();
   OutputSection *findSection(StringRef Name);
   OutputSection *createSection(StringRef Name);
   std::map<StringRef, std::vector<DefinedImportData *>> groupImports();
