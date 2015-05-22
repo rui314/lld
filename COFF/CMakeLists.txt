@@ -3,6 +3,7 @@ tablegen(LLVM Options.inc -gen-opt-parser-defs)
 add_public_tablegen_target(COFFOptionsTableGen)
 
 add_llvm_library(lldCOFF
+  CommandLine.cpp
   Driver.cpp
   Reader.cpp
   SymbolTable.cpp
