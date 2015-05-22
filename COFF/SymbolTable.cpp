@@ -187,7 +187,7 @@ std::error_code SymbolTable::addMemberFile(CanBeDefined *Sym) {
   if (!File)
     return std::error_code();
   File->setParentName(Sym->File->Name);
-  if (Config.Verbose)
+  if (Config->Verbose)
     llvm::dbgs() << "Loaded " << File->getShortName() << " for " << Sym->getName() << "\n";
   return addFile(std::move(File));
 }

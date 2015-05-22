@@ -38,7 +38,7 @@ void Writer::markChunks() {
         C->markLive();
   cast<Defined>(Symtab->find("mainCRTStartup"))->markLive();
 
-  if (Config.Verbose)
+  if (Config->Verbose)
     for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
       for (std::unique_ptr<Chunk> &C : File->Chunks)
         if (C && !C->isLive())

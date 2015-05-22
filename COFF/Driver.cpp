@@ -109,7 +109,7 @@ static std::vector<StringRef> splitPathList(StringRef str) {
 namespace lld {
 namespace coff {
 
-Configuration Config;
+Configuration *Config;
 
 std::string findLib(StringRef Filename) {
   if (llvm::sys::fs::exists(Filename))
@@ -154,8 +154,6 @@ ErrorOr<std::unique_ptr<InputFile>> createFile(StringRef Path) {
   return ObjectFile::create(Path);
 }
 
-std::set<std::string> VisitedFiles;
-
 std::error_code parseDirectives(StringRef S,
                                 std::vector<std::unique_ptr<InputFile>> *Res,
                                 StringAllocator *Alloc) {
@@ -174,9 +172,9 @@ std::error_code parseDirectives(StringRef S,
 
   for (auto *Arg : Args->filtered(OPT_defaultlib)) {
     std::string Path = findLib(Arg->getValue());
-    if (VisitedFiles.count(StringRef(Path).lower()) > 0)
+    if (Config->VisitedFiles.count(StringRef(Path).lower()) > 0)
       continue;
-    VisitedFiles.insert(StringRef(Path).lower());
+    Config->VisitedFiles.insert(StringRef(Path).lower());
     ErrorOr<std::unique_ptr<InputFile>> FileOrErr = ArchiveFile::create(Path);
     if (auto EC = FileOrErr.getError())
       return EC;
@@ -186,6 +184,7 @@ std::error_code parseDirectives(StringRef S,
 }
 
 bool link(int Argc, const char *Argv[]) {
+  Config = new Configuration();
   auto ArgsOrErr = parseArgs(Argc, Argv);
   if (auto EC = ArgsOrErr.getError()) {
     llvm::errs() << EC.message() << "\n";
@@ -194,14 +193,14 @@ bool link(int Argc, const char *Argv[]) {
   std::unique_ptr<llvm::opt::InputArgList> Args = std::move(ArgsOrErr.get());
 
   if (Args->hasArg(OPT_verbose))
-    Config.Verbose = true;
+    Config->Verbose = true;
 
   SymbolTable Symtab;
   for (auto *Arg : Args->filtered(OPT_INPUT)) {
     std::string Path = findFile(Arg->getValue());
-    if (VisitedFiles.count(StringRef(Path).lower()) > 0)
+    if (Config->VisitedFiles.count(StringRef(Path).lower()) > 0)
       continue;
-    VisitedFiles.insert(StringRef(Path).lower());
+    Config->VisitedFiles.insert(StringRef(Path).lower());
     ErrorOr<std::unique_ptr<InputFile>> FileOrErr = createFile(Path);
     if (auto EC = FileOrErr.getError()) {
       llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";

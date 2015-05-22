@@ -10,14 +10,17 @@
 #ifndef LLD_COFF_CONFIG_H
 #define LLD_COFF_CONFIG_H
 
+#include <set>
+
 namespace lld {
 namespace coff {
 
 struct Configuration {
   bool Verbose = false;
+  std::set<std::string> VisitedFiles;
 };
 
-extern Configuration Config;
+extern Configuration *Config;
 
 } // namespace coff
 } // namespace lld
