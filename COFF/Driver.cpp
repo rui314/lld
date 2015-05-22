@@ -74,13 +74,14 @@ public:
 
 class BumpPtrStringSaver : public llvm::cl::StringSaver {
 public:
+  BumpPtrStringSaver(lld::coff::StringAllocator *A) : Alloc(A) {}
+
   const char *SaveString(const char *S) override {
-    StringRef Copy = Alloc.save(S);
-    return Copy.data();
+    return Alloc->save(S).data();
   }
 
 private:
-  lld::coff::StringAllocator Alloc;
+  lld::coff::StringAllocator *Alloc;
 };
 
 }
@@ -109,7 +110,6 @@ namespace lld {
 namespace coff {
 
 Configuration Config;
-BumpPtrStringSaver StringSaver;
 
 std::string findLib(StringRef Filename) {
   if (llvm::sys::fs::exists(Filename))
@@ -157,10 +157,12 @@ ErrorOr<std::unique_ptr<InputFile>> createFile(StringRef Path) {
 std::set<std::string> VisitedFiles;
 
 std::error_code parseDirectives(StringRef S,
-                                std::vector<std::unique_ptr<InputFile>> *Res) {
+                                std::vector<std::unique_ptr<InputFile>> *Res,
+                                StringAllocator *Alloc) {
   SmallVector<const char *, 16> Tokens;
   Tokens.push_back("link"); // argv[0] value. Will be ignored.
-  llvm::cl::TokenizeWindowsCommandLine(S, StringSaver, Tokens);
+  BumpPtrStringSaver Saver(Alloc);
+  llvm::cl::TokenizeWindowsCommandLine(S, Saver, Tokens);
   Tokens.push_back(nullptr);
   int Argc = Tokens.size() - 1;
   const char **Argv = &Tokens[0];

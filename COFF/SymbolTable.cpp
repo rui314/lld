@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "Allocator.h"
 #include "Config.h"
 #include "SymbolTable.h"
 #include "lld/Core/Error.h"
@@ -18,7 +19,8 @@ namespace lld {
 namespace coff {
 
 std::error_code parseDirectives(StringRef S,
-                                std::vector<std::unique_ptr<InputFile>> *Res);
+                                std::vector<std::unique_ptr<InputFile>> *Res,
+                                StringAllocator *Alloc);
 
 SymbolTable::SymbolTable() {
   addInitialSymbol(new DefinedAbsolute("__ImageBase", ImageBase));
@@ -54,7 +56,7 @@ std::error_code SymbolTable::addFile(ObjectFile *File) {
   StringRef Dir = File->getDirectives();
   if (!Dir.empty()) {
     std::vector<std::unique_ptr<InputFile>> Libs;
-    if (auto EC = parseDirectives(Dir, &Libs))
+    if (auto EC = parseDirectives(Dir, &Libs, &StringAlloc))
       return EC;
     for (std::unique_ptr<InputFile> &L : Libs)
       addFile(std::move(L));

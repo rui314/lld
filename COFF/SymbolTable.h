@@ -10,6 +10,7 @@
 #ifndef LLD_COFF_SYMBOL_TABLE_H
 #define LLD_COFF_SYMBOL_TABLE_H
 
+#include "Allocator.h"
 #include "Reader.h"
 #include "llvm/Support/Allocator.h"
 #include <unordered_map>
@@ -50,6 +51,7 @@ private:
 
   std::vector<std::unique_ptr<Symbol>> Symbols;
   llvm::BumpPtrAllocator Alloc;
+  StringAllocator StringAlloc;
 };
 
 } // namespace pecoff
