@@ -80,11 +80,13 @@ std::error_code SymbolTable::addFile(ImplibFile *File) {
 
 bool SymbolTable::reportRemainingUndefines() {
   for (auto &I : Symtab) {
-    SymbolRef *Ref = I.second;
-    if (!dyn_cast<Undefined>(Ref->Ptr))
-      continue;
-    llvm::errs() << "undefined symbol: " << Ref->Ptr->getName() << "\n";
-    return true;
+    Symbol *Sym = I.second->Ptr;
+    if (auto *Undef = dyn_cast<Undefined>(Sym)) {
+      if (Undef->replaceWeakExternal())
+        continue;
+      llvm::errs() << "undefined symbol: " << Sym->getName() << "\n";
+      return true;
+    }
   }
   return false;
 }

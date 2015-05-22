@@ -73,6 +73,13 @@ ErrorOr<std::unique_ptr<InputFile>> CanBeDefined::getMember() {
   return std::move(FileOrErr.get());
 }
 
+bool Undefined::replaceWeakExternal() {
+  if (!WeakExternal)
+    return false;
+  getSymbolRef()->Ptr = WeakExternal;
+  return true;
+}
+
 static StringRef basename(StringRef Path) {
   size_t Pos = Path.rfind('\\');
   if (Pos == StringRef::npos)
@@ -83,8 +90,8 @@ static StringRef basename(StringRef Path) {
 std::string InputFile::getShortName() {
   StringRef Name = getName();
   if (ParentName == "")
-    return Name;
-  return (basename(Name) + "(" + basename(ParentName) + ")").str();
+    return Name.lower();
+  return StringRef((basename(ParentName) + "(" + basename(Name) + ")").str()).lower();
 }
 
 ErrorOr<std::unique_ptr<ArchiveFile>> ArchiveFile::create(StringRef Path) {
@@ -179,6 +186,7 @@ void ObjectFile::initializeChunks() {
 void ObjectFile::initializeSymbols() {
   uint32_t NumSymbols = COFFFile->getNumberOfSymbols();
   SymbolRefs.resize(NumSymbols);
+  std::vector<Symbol *> CreatedSyms(NumSymbols);
   for (uint32_t I = 0; I < NumSymbols; ++I) {
     // Get a COFFSymbolRef object.
     auto SrefOrErr = COFFFile->getSymbol(I);
@@ -205,12 +213,16 @@ void ObjectFile::initializeSymbols() {
     } else if (Sref.getSectionNumber() == -1) {
       if (SymbolName != "@comp.id" && SymbolName != "@feat.00")
         Sym.reset(new DefinedAbsolute(SymbolName, Sref.getValue()));
+    } else if (Sref.isWeakExternal()) {
+      auto *Aux = (const coff_aux_weak_external *)COFFFile->getSymbol(I + 1)->getRawPtr();
+      Sym.reset(new Undefined(SymbolName, CreatedSyms[Aux->TagIndex]));
     } else {
       if (std::unique_ptr<Chunk> &C = Chunks[Sref.getSectionNumber()])
         Sym.reset(new DefinedRegular(this, SymbolName, Sref, C.get()));
     }
     if (Sym) {
       Sym->setSymbolRefAddress(&SymbolRefs[I]);
+      CreatedSyms[I] = Sym.get();
       Symbols.push_back(std::move(Sym));
     }
     I += Sref.getNumberOfAuxSymbols();
@@ -292,7 +304,6 @@ void SectionChunk::markLive() {
   COFFObjectFile *FP = File->COFFFile.get();
   for (const auto &I : SectionRef(Ref, FP).relocations()) {
     const coff_relocation *Rel = FP->getCOFFRelocation(I);
-    assert(File->SymbolRefs[Rel->SymbolTableIndex]);
     auto *S = cast<Defined>(File->SymbolRefs[Rel->SymbolTableIndex]->Ptr);
     S->markLive();
   }

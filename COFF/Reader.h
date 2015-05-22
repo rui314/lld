@@ -181,6 +181,7 @@ public:
 
   void setSymbolRefAddress(SymbolRef **PP) { SymbolRefPP = PP; }
   void setSymbolRef(SymbolRef *P) { *SymbolRefPP = P; }
+  SymbolRef *getSymbolRef() { return *SymbolRefPP; }
 
 protected:
   Symbol(Kind K, StringRef N) : SymbolKind(K), Name(N) {}
@@ -305,11 +306,17 @@ private:
 
 class Undefined : public Symbol {
 public:
-  Undefined(StringRef Name) : Symbol(UndefinedKind, Name) {}
+  Undefined(StringRef Name, Symbol *S = nullptr)
+    : Symbol(UndefinedKind, Name), WeakExternal(S) {}
 
   static bool classof(const Symbol *S) {
     return S->kind() == UndefinedKind;
   }
+
+  bool replaceWeakExternal();
+
+private:
+  Symbol *WeakExternal;
 };
 
 struct SymbolRef {
