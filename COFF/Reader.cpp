@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Reader.h"
+#include "Writer.h"
 #include "lld/Core/Error.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Object/COFF.h"
@@ -415,40 +416,6 @@ uint32_t CommonChunk::getPermissions() const {
 void ImportFuncChunk::applyRelocations(uint8_t *Buffer) {
   uint32_t Operand = ImpSymbol->getRVA() - RVA - Data.size();
   write32le(Buffer + FileOff + 2, Operand);
-}
-
-OutputSection::OutputSection(StringRef N, uint32_t SI)
-    : Name(N), SectionIndex(SI) {
-  memset(&Header, 0, sizeof(Header));
-  strncpy(Header.Name, Name.data(), std::min(Name.size(), size_t(8)));
-}
-
-void OutputSection::setRVA(uint64_t RVA) {
-  Header.VirtualAddress = RVA;
-  for (Chunk *C : Chunks)
-    C->setRVA(C->getRVA() + RVA);
-}
-
-void OutputSection::setFileOffset(uint64_t Off) {
-  Header.PointerToRawData = Off;
-  for (Chunk *C : Chunks)
-    C->setFileOff(C->getFileOff() + Off);
-}
-
-void OutputSection::addChunk(Chunk *C) {
-  Chunks.push_back(C);
-  uint64_t Off = Header.VirtualSize;
-  Off = RoundUpToAlignment(Off, C->getAlign());
-  C->setRVA(Off);
-  C->setFileOff(Off);
-  Off += C->getSize();
-  Header.VirtualSize = Off;
-  if (!C->isBSS())
-    Header.SizeOfRawData = RoundUpToAlignment(Off, FileAlignment);
-}
-
-void OutputSection::addPermissions(uint32_t C) {
-  Header.Characteristics = Header.Characteristics | (C & PermMask);
 }
 
 }

@@ -27,6 +27,36 @@ const int HeaderSize = DOSStubSize + sizeof(llvm::COFF::PEMagic)
   + sizeof(llvm::object::pe32plus_header)
   + sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
 
+class OutputSection {
+public:
+  OutputSection(StringRef Nam, uint32_t SectionIndex);
+  void setRVA(uint64_t);
+  void setFileOffset(uint64_t);
+  void addChunk(Chunk *C);
+  StringRef getName() { return Name; }
+  uint64_t getSectionIndex() { return SectionIndex; }
+  std::vector<Chunk *> &getChunks() { return Chunks; }
+
+  const llvm::object::coff_section *getHeader() {
+    if (Header.SizeOfRawData == 0)
+      Header.PointerToRawData = 0;
+    return &Header;
+  }
+  void addPermissions(uint32_t C);
+  uint32_t getPermissions() { return Header.Characteristics & PermMask; }
+  uint32_t getCharacteristics() { return Header.Characteristics; }
+  uint64_t getRVA() { return Header.VirtualAddress; }
+  uint64_t getFileOff() { return Header.PointerToRawData; }
+  uint64_t getVirtualSize() { return Header.VirtualSize; }
+  uint64_t getRawSize() { return Header.SizeOfRawData; }
+
+private:
+  llvm::object::coff_section Header;
+  StringRef Name;
+  uint32_t SectionIndex;
+  std::vector<Chunk *> Chunks;
+};
+
 class Writer {
 public:
   explicit Writer(SymbolTable *T) : Symtab(T) {}
