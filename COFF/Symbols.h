@@ -189,17 +189,16 @@ private:
 class Undefined : public SymbolBody {
 public:
   Undefined(StringRef Name, SymbolBody **S = nullptr)
-    : SymbolBody(UndefinedKind, Name), WeakExternal(S) {}
+    : SymbolBody(UndefinedKind, Name), Alias(S) {}
 
   static bool classof(const SymbolBody *S) {
     return S->kind() == UndefinedKind;
   }
 
-  bool replaceWeakExternal();
-  bool hasWeakExternal() { return WeakExternal; }
+  SymbolBody *getWeakAlias() { return Alias ? *Alias : nullptr; }
 
 private:
-  SymbolBody **WeakExternal;
+  SymbolBody **Alias;
 };
 
 } // namespace coff

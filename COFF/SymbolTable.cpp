@@ -78,11 +78,13 @@ std::error_code SymbolTable::addFile(ImportFile *File) {
 
 bool SymbolTable::reportRemainingUndefines() {
   for (auto &I : Symtab) {
-    SymbolBody *Sym = I.second->Body;
-    if (auto *Undef = dyn_cast<Undefined>(Sym)) {
-      if (Undef->replaceWeakExternal())
+    Symbol *Sym = I.second;
+    if (auto *Undef = dyn_cast<Undefined>(Sym->Body)) {
+      if (SymbolBody *Alias = Undef->getWeakAlias()) {
+        Sym->Body = Alias->getSymbol()->Body;
         continue;
-      llvm::errs() << "undefined symbol: " << Sym->getName() << "\n";
+      }
+      llvm::errs() << "undefined symbol: " << Sym->Body->getName() << "\n";
       return true;
     }
   }
@@ -115,7 +117,7 @@ std::error_code SymbolTable::resolve(SymbolBody *Sym, Symbol **RefP) {
     // identity, so a selection is arbitrary. We choose the existing
     // one.
     if (auto *New = dyn_cast<Undefined>(Sym)) {
-      if (New->hasWeakExternal())
+      if (New->getWeakAlias())
         Ref->Body = New;
       return std::error_code();
     }
@@ -145,7 +147,7 @@ std::error_code SymbolTable::resolve(SymbolBody *Sym, Symbol **RefP) {
       return std::error_code();
 
     auto *New = cast<Undefined>(Sym);
-    if (New->hasWeakExternal()) {
+    if (New->getWeakAlias()) {
       Ref->Body = Sym;
       return std::error_code();
     }

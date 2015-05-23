@@ -44,12 +44,5 @@ ErrorOr<std::unique_ptr<InputFile>> CanBeDefined::getMember() {
   return std::move(FileOrErr.get());
 }
 
-bool Undefined::replaceWeakExternal() {
-  if (!WeakExternal || !*WeakExternal)
-    return false;
-  getSymbol()->Body = (*WeakExternal)->getSymbol()->Body;
-  return true;
-}
-
 }
 }
