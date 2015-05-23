@@ -36,20 +36,21 @@ static StringRef dropDollar(StringRef S) {
 
 void Writer::markChunks() {
   cast<Defined>(Symtab->find("mainCRTStartup"))->markLive();
-
-  if (Config->Verbose)
-    for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
-      for (std::unique_ptr<Chunk> &C : File->Chunks)
-        if (C && !C->isLive())
-          C->printDiscardMessage();
+  for (Chunk *C : Symtab->getChunks())
+    if (C->isRoot())
+      C->markLive();
 }
 
 void Writer::groupSections() {
   std::map<StringRef, std::vector<Chunk *>> Map;
-  for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
-    for (std::unique_ptr<Chunk> &C : File->Chunks)
-      if (C)
-        Map[dropDollar(C->getSectionName())].push_back(C.get());
+  for (Chunk *C : Symtab->getChunks()) {
+    if (C->isLive()) {
+      Map[dropDollar(C->getSectionName())].push_back(C);
+      continue;
+    }
+    if (Config->Verbose)
+      C->printDiscardMessage();
+  }
 
   auto comp = [](Chunk *A, Chunk *B) {
     return A->getSectionName() < B->getSectionName();

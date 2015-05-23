@@ -25,9 +25,7 @@ public:
   std::error_code addFile(std::unique_ptr<InputFile> File);
   bool reportRemainingUndefines();
 
-  std::vector<std::unique_ptr<ObjectFile>> &getFiles() {
-    return ObjectFiles;
-  }
+  std::vector<Chunk *> getChunks();
 
   Symbol *find(StringRef Name);
   void dump();

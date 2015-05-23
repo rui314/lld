@@ -192,6 +192,15 @@ std::error_code SymbolTable::addMemberFile(CanBeDefined *Sym) {
   return addFile(std::move(File));
 }
 
+std::vector<Chunk *> SymbolTable::getChunks() {
+  std::vector<Chunk *> Res;
+  for (std::unique_ptr<ObjectFile> &File : ObjectFiles)
+    for (std::unique_ptr<Chunk> &C : File->Chunks)
+      if (C)
+        Res.push_back(C.get());
+  return Res;
+}
+
 Symbol *SymbolTable::find(StringRef Name) {
   auto It = Symtab.find(Name);
   if (It == Symtab.end())

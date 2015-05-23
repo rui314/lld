@@ -204,6 +204,8 @@ void ObjectFile::initializeSymbols() {
       llvm::errs() << "broken object file: " << Name << ": " << EC.message() << "\n";
       break;
     }
+    if (SymbolName == "@comp.id" || SymbolName == "@feat.00")
+      continue;
 
     std::unique_ptr<Symbol> Sym;
     if (Sref.isUndefined()) {
@@ -213,8 +215,7 @@ void ObjectFile::initializeSymbols() {
       Chunks.push_back(std::unique_ptr<Chunk>(C));
       Sym.reset(new DefinedRegular(this, SymbolName, Sref, C));
     } else if (Sref.getSectionNumber() == -1) {
-      if (SymbolName != "@comp.id" && SymbolName != "@feat.00")
-        Sym.reset(new DefinedAbsolute(SymbolName, Sref.getValue()));
+      Sym.reset(new DefinedAbsolute(SymbolName, Sref.getValue()));
     } else if (Sref.isWeakExternal()) {
       auto *Aux = (const coff_aux_weak_external *)COFFFile->getSymbol(I + 1)->getRawPtr();
       Sym.reset(new Undefined(SymbolName, CreatedSyms[Aux->TagIndex]));
@@ -291,6 +292,10 @@ SectionChunk::SectionChunk(ObjectFile *F, const coff_section *H, uint32_t SI)
 const uint8_t *SectionChunk::getData() const {
   assert(!isBSS());
   return Data.data();
+}
+
+bool SectionChunk::isRoot() {
+  return !(Header->Characteristics & llvm::COFF::IMAGE_SCN_CNT_CODE);
 }
 
 void SectionChunk::markLive() {
