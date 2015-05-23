@@ -323,8 +323,8 @@ void SectionChunk::markLive() {
   COFFObjectFile *FP = File->COFFFile.get();
   for (const auto &I : SectionRef(Ref, FP).relocations()) {
     const coff_relocation *Rel = FP->getCOFFRelocation(I);
-    auto *S = cast<Defined>(File->SymbolRefs[Rel->SymbolTableIndex]->Ptr);
-    S->markLive();
+    if (auto *S = dyn_cast<Defined>(File->SymbolRefs[Rel->SymbolTableIndex]->Ptr))
+      S->markLive();
   }
   for (Chunk *C : Children)
     C->markLive();
