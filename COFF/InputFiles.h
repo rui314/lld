@@ -54,7 +54,9 @@ public:
   static ErrorOr<std::unique_ptr<ArchiveFile>> create(StringRef Path);
 
   StringRef getName() override { return Name; }
-  std::vector<std::unique_ptr<SymbolBody>> &getSymbols() override { return Symbols; }
+  std::vector<std::unique_ptr<SymbolBody>> &getSymbols() override {
+    return SymbolBodies;
+  }
 
   std::string Name;
   std::unique_ptr<Archive> File;
@@ -66,7 +68,7 @@ private:
               std::unique_ptr<MemoryBuffer> Mem);
 
   std::unique_ptr<MemoryBuffer> MB;
-  std::vector<std::unique_ptr<SymbolBody>> Symbols;
+  std::vector<std::unique_ptr<SymbolBody>> SymbolBodies;
   std::set<const char *> Seen;
 };
 
@@ -79,13 +81,15 @@ public:
     create(StringRef Path, MemoryBufferRef MB);
 
   StringRef getName() override { return Name; }
-  std::vector<std::unique_ptr<SymbolBody>> &getSymbols() override { return SymbolBodies; }
+  std::vector<std::unique_ptr<SymbolBody>> &getSymbols() override {
+    return SymbolBodies;
+  }
   StringRef getDirectives() { return Directives; }
 
   std::string Name;
   std::vector<std::unique_ptr<SymbolBody>> SymbolBodies;
   std::vector<SymbolBody *> SparseSymbols;
-  std::vector<Symbol *> SymSymSym;
+  std::vector<Symbol *> Symbols;
   std::vector<std::unique_ptr<Chunk>> Chunks;
   std::unique_ptr<COFFObjectFile> COFFFile;
 
@@ -94,8 +98,8 @@ private:
   void initializeChunks();
   void initializeSymbols();
 
-  SymbolBody *createSymbol(StringRef Name, COFFSymbolRef Sym,
-                       const void *Aux, bool IsFirst);
+  SymbolBody *createSymbolBody(StringRef Name, COFFSymbolRef Sym,
+                               const void *Aux, bool IsFirst);
 
   std::unique_ptr<MemoryBuffer> MB;
   StringRef Directives;
@@ -104,7 +108,6 @@ private:
 class ImportFile : public InputFile {
 public:
   ImportFile(MemoryBufferRef M);
-
   static bool classof(const InputFile *F) { return F->kind() == ImplibKind; }
 
   StringRef getName() override;

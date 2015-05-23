@@ -62,7 +62,7 @@ ArchiveFile::ArchiveFile(StringRef N, std::unique_ptr<Archive> F,
     : InputFile(ArchiveKind), Name(N), File(std::move(F)), MB(std::move(M)) {
   for (const Archive::Symbol &Sym : File->symbols())
     if (Sym.getName() != "__NULL_IMPORT_DESCRIPTOR")
-      Symbols.push_back(llvm::make_unique<CanBeDefined>(this, Sym));
+      SymbolBodies.push_back(llvm::make_unique<CanBeDefined>(this, Sym));
 }
 
 ErrorOr<MemoryBufferRef>
@@ -135,7 +135,7 @@ void ObjectFile::initializeChunks() {
 
 void ObjectFile::initializeSymbols() {
   uint32_t NumSymbols = COFFFile->getNumberOfSymbols();
-  SymSymSym.resize(NumSymbols);
+  Symbols.resize(NumSymbols);
   SparseSymbols.resize(NumSymbols);
   int32_t LastSectionNumber = 0;
   for (uint32_t I = 0; I < NumSymbols; ++I) {
@@ -161,19 +161,19 @@ void ObjectFile::initializeSymbols() {
       AuxP = COFFFile->getSymbol(I + 1)->getRawPtr();
     bool IsFirst = (LastSectionNumber != Sym.getSectionNumber());
 
-    std::unique_ptr<SymbolBody> SymP(createSymbol(SymbolName, Sym, AuxP, IsFirst));
-    if (SymP) {
-      SymP->setSymbolAddress(&SymSymSym[I]);
-      SparseSymbols[I] = SymP.get();
-      SymbolBodies.push_back(std::move(SymP));
+    std::unique_ptr<SymbolBody> Body(createSymbolBody(SymbolName, Sym, AuxP, IsFirst));
+    if (Body) {
+      Body->setSymbolAddress(&Symbols[I]);
+      SparseSymbols[I] = Body.get();
+      SymbolBodies.push_back(std::move(Body));
     }
     I += Sym.getNumberOfAuxSymbols();
     LastSectionNumber = Sym.getSectionNumber();
   }
 }
 
-SymbolBody *ObjectFile::createSymbol(StringRef Name, COFFSymbolRef Sym,
-                                 const void *AuxP, bool IsFirst) {
+SymbolBody *ObjectFile::createSymbolBody(StringRef Name, COFFSymbolRef Sym,
+                                         const void *AuxP, bool IsFirst) {
   if (Sym.isUndefined())
     return new Undefined(Name);
   if (Sym.isCommon()) {

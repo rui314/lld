@@ -24,12 +24,18 @@ using llvm::object::COFFSymbolRef;
 namespace lld {
 namespace coff {
 
-const uint64_t ImageBase = 0x140000000;
+static const uint64_t ImageBase = 0x140000000;
 
 class ArchiveFile;
 class InputFile;
 class ObjectFile;
-struct Symbol;
+class SymbolBody;
+
+struct Symbol {
+  Symbol(SymbolBody *P) : Body(P) {}
+  Symbol() : Body(nullptr) {}
+  SymbolBody *Body;
+};
 
 class SymbolBody {
 public:
@@ -195,12 +201,6 @@ public:
 
 private:
   SymbolBody **WeakExternal;
-};
-
-struct Symbol {
-  Symbol(SymbolBody *P) : Body(P) {}
-  Symbol() : Body(nullptr) {}
-  SymbolBody *Body;
 };
 
 } // namespace coff
