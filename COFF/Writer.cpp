@@ -34,29 +34,22 @@ static StringRef dropDollar(StringRef S) {
   return S.substr(0, S.find('$'));
 }
 
-static void forEachChunk(SymbolTable *Symtab, std::function<void(Chunk *)> F) {
-  for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
-    for (std::unique_ptr<Chunk> &C : File->Chunks)
-      if (C)
-        F(C.get());
-}
-
 void Writer::markChunks() {
-  forEachChunk(Symtab, [](Chunk *C) { if (C->isRoot()) C->markLive(); });
   cast<Defined>(Symtab->find("mainCRTStartup"))->markLive();
 
-  if (Config->Verbose) {
-    auto F = [](Chunk *C) { if (!C->isLive()) C->printDiscardMessage(); };
-    forEachChunk(Symtab, F);
-  }
+  if (Config->Verbose)
+    for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
+      for (std::unique_ptr<Chunk> &C : File->Chunks)
+        if (C && !C->isLive())
+          C->printDiscardMessage();
 }
 
 void Writer::groupSections() {
   std::map<StringRef, std::vector<Chunk *>> Map;
-  auto Push = [&](Chunk *C) {
-    Map[dropDollar(C->getSectionName())].push_back(C);
-  };
-  forEachChunk(Symtab, Push);
+  for (std::unique_ptr<ObjectFile> &File : Symtab->getFiles())
+    for (std::unique_ptr<Chunk> &C : File->Chunks)
+      if (C)
+        Map[dropDollar(C->getSectionName())].push_back(C.get());
 
   auto comp = [](Chunk *A, Chunk *B) {
     return A->getSectionName() < B->getSectionName();

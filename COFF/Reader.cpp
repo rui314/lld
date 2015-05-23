@@ -293,10 +293,6 @@ const uint8_t *SectionChunk::getData() const {
   return Data.data();
 }
 
-bool SectionChunk::isRoot() {
-  return !(Header->Characteristics & llvm::COFF::IMAGE_SCN_CNT_CODE);
-}
-
 void SectionChunk::markLive() {
   if (Live)
     return;

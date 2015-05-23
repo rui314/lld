@@ -65,7 +65,6 @@ public:
   virtual StringRef getSectionName() const { unimplemented(); }
   virtual void printDiscardMessage() { unimplemented(); }
 
-  virtual bool isRoot() { return false; }
   virtual bool isLive() { return true; }
   virtual void markLive() {}
 
@@ -99,7 +98,6 @@ public:
   StringRef getSectionName() const override { return SectionName; }
   void printDiscardMessage() override;
 
-  bool isRoot() override;
   void markLive() override;
   bool isLive() override { return Live; }
 
