@@ -34,7 +34,7 @@ public:
   virtual ~InputFile() {}
 
   virtual StringRef getName() = 0;
-  virtual std::vector<std::unique_ptr<Symbol>> &getSymbols() = 0;
+  virtual std::vector<std::unique_ptr<SymbolBody>> &getSymbols() = 0;
 
   std::string getShortName();
   void setParentName(StringRef N) { ParentName = N; }
@@ -54,7 +54,7 @@ public:
   static ErrorOr<std::unique_ptr<ArchiveFile>> create(StringRef Path);
 
   StringRef getName() override { return Name; }
-  std::vector<std::unique_ptr<Symbol>> &getSymbols() override { return Symbols; }
+  std::vector<std::unique_ptr<SymbolBody>> &getSymbols() override { return Symbols; }
 
   std::string Name;
   std::unique_ptr<Archive> File;
@@ -66,7 +66,7 @@ private:
               std::unique_ptr<MemoryBuffer> Mem);
 
   std::unique_ptr<MemoryBuffer> MB;
-  std::vector<std::unique_ptr<Symbol>> Symbols;
+  std::vector<std::unique_ptr<SymbolBody>> Symbols;
   std::set<const char *> Seen;
 };
 
@@ -79,13 +79,13 @@ public:
     create(StringRef Path, MemoryBufferRef MB);
 
   StringRef getName() override { return Name; }
-  std::vector<std::unique_ptr<Symbol>> &getSymbols() override { return Symbols; }
+  std::vector<std::unique_ptr<SymbolBody>> &getSymbols() override { return SymbolBodies; }
   StringRef getDirectives() { return Directives; }
 
   std::string Name;
-  std::vector<std::unique_ptr<Symbol>> Symbols;
-  std::vector<Symbol *> SparseSymbols;
-  std::vector<SymbolRef *> SymbolRefs;
+  std::vector<std::unique_ptr<SymbolBody>> SymbolBodies;
+  std::vector<SymbolBody *> SparseSymbols;
+  std::vector<Symbol *> SymSymSym;
   std::vector<std::unique_ptr<Chunk>> Chunks;
   std::unique_ptr<COFFObjectFile> COFFFile;
 
@@ -94,7 +94,7 @@ private:
   void initializeChunks();
   void initializeSymbols();
 
-  Symbol *createSymbol(StringRef Name, COFFSymbolRef Sym,
+  SymbolBody *createSymbol(StringRef Name, COFFSymbolRef Sym,
                        const void *Aux, bool IsFirst);
 
   std::unique_ptr<MemoryBuffer> MB;
@@ -108,13 +108,16 @@ public:
   static bool classof(const InputFile *F) { return F->kind() == ImplibKind; }
 
   StringRef getName() override;
-  std::vector<std::unique_ptr<Symbol>> &getSymbols() override { return Symbols; }
+
+  std::vector<std::unique_ptr<SymbolBody>> &getSymbols() override {
+    return SymbolBodies;
+  }
 
 private:
   void readImplib();
 
   MemoryBufferRef MBRef;
-  std::vector<std::unique_ptr<Symbol>> Symbols;
+  std::vector<std::unique_ptr<SymbolBody>> SymbolBodies;
   StringAllocator Alloc;
 };
 

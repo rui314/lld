@@ -29,9 +29,9 @@ const uint64_t ImageBase = 0x140000000;
 class ArchiveFile;
 class InputFile;
 class ObjectFile;
-struct SymbolRef;
+struct Symbol;
 
-class Symbol {
+class SymbolBody {
 public:
   enum Kind {
     DefinedRegularKind,
@@ -43,29 +43,29 @@ public:
   };
 
   Kind kind() const { return SymbolKind; }
-  virtual ~Symbol() {}
+  virtual ~SymbolBody() {}
 
   virtual bool isExternal() { return true; }
   StringRef getName() { return Name; }
 
-  void setSymbolRefAddress(SymbolRef **PP) { SymbolRefPP = PP; }
-  void setSymbolRef(SymbolRef *P) { *SymbolRefPP = P; }
-  SymbolRef *getSymbolRef() { return *SymbolRefPP; }
+  void setSymbolAddress(Symbol **PP) { SymbolRefPP = PP; }
+  void setSymbol(Symbol *P) { *SymbolRefPP = P; }
+  Symbol *getSymbol() { return *SymbolRefPP; }
 
 protected:
-  Symbol(Kind K, StringRef N) : SymbolKind(K), Name(N) {}
+  SymbolBody(Kind K, StringRef N) : SymbolKind(K), Name(N) {}
 
 private:
   const Kind SymbolKind;
   StringRef Name;
-  SymbolRef **SymbolRefPP = nullptr;
+  Symbol **SymbolRefPP = nullptr;
 };
 
-class Defined : public Symbol {
+class Defined : public SymbolBody {
 public:
-  Defined(Kind K, StringRef Name) : Symbol(K, Name) {}
+  Defined(Kind K, StringRef Name) : SymbolBody(K, Name) {}
 
-  static bool classof(const Symbol *S) {
+  static bool classof(const SymbolBody *S) {
     Kind K = S->kind();
     return DefinedRegularKind <= K && K <= DefinedImportFuncKind;
   }
@@ -83,7 +83,7 @@ public:
   DefinedRegular(ObjectFile *F, StringRef Name, COFFSymbolRef S, Chunk *C)
     : Defined(DefinedRegularKind, Name), File(F), Sym(S), Section(C) {}
 
-  static bool classof(const Symbol *S) {
+  static bool classof(const SymbolBody *S) {
     return S->kind() == DefinedRegularKind;
   }
 
@@ -113,7 +113,7 @@ public:
   DefinedAbsolute(StringRef Name, uint64_t VA)
     : Defined(DefinedAbsoluteKind, Name), RVA(VA - ImageBase) {}
 
-  static bool classof(const Symbol *S) {
+  static bool classof(const SymbolBody *S) {
     return S->kind() == DefinedAbsoluteKind;
   }
 
@@ -130,7 +130,7 @@ public:
     : Defined(DefinedImportDataKind, ImportName),
       DLLName(D), ExpName(ExportName) {}
 
-  static bool classof(const Symbol *S) {
+  static bool classof(const SymbolBody *S) {
     return S->kind() == DefinedImportDataKind;
   }
 
@@ -151,7 +151,7 @@ public:
   DefinedImportFunc(StringRef Name, DefinedImportData *S)
     : Defined(DefinedImportFuncKind, Name), Data(S) {}
 
-  static bool classof(const Symbol *S) {
+  static bool classof(const SymbolBody *S) {
     return S->kind() == DefinedImportFuncKind;
   }
 
@@ -164,12 +164,12 @@ private:
   ImportFuncChunk Data;
 };
 
-class CanBeDefined : public Symbol {
+class CanBeDefined : public SymbolBody {
 public:
   CanBeDefined(ArchiveFile *F, const Archive::Symbol S)
-    : Symbol(CanBeDefinedKind, S.getName()), File(F), Sym(S) {}
+    : SymbolBody(CanBeDefinedKind, S.getName()), File(F), Sym(S) {}
 
-  static bool classof(const Symbol *S) {
+  static bool classof(const SymbolBody *S) {
     return S->kind() == CanBeDefinedKind;
   }
 
@@ -181,12 +181,12 @@ private:
   const Archive::Symbol Sym;
 };
 
-class Undefined : public Symbol {
+class Undefined : public SymbolBody {
 public:
-  Undefined(StringRef Name, Symbol **S = nullptr)
-    : Symbol(UndefinedKind, Name), WeakExternal(S) {}
+  Undefined(StringRef Name, SymbolBody **S = nullptr)
+    : SymbolBody(UndefinedKind, Name), WeakExternal(S) {}
 
-  static bool classof(const Symbol *S) {
+  static bool classof(const SymbolBody *S) {
     return S->kind() == UndefinedKind;
   }
 
@@ -194,13 +194,13 @@ public:
   bool hasWeakExternal() { return WeakExternal; }
 
 private:
-  Symbol **WeakExternal;
+  SymbolBody **WeakExternal;
 };
 
-struct SymbolRef {
-  SymbolRef(Symbol *P) : Ptr(P) {}
-  SymbolRef() : Ptr(nullptr) {}
-  Symbol *Ptr;
+struct Symbol {
+  Symbol(SymbolBody *P) : Body(P) {}
+  Symbol() : Body(nullptr) {}
+  SymbolBody *Body;
 };
 
 } // namespace coff

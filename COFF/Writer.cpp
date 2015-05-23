@@ -122,7 +122,7 @@ std::map<StringRef, std::vector<DefinedImportData *>> Writer::binImports() {
   std::map<StringRef, std::vector<DefinedImportData *>> Res;
   OutputSection *Text = createSection(".text");
   for (std::unique_ptr<ImportFile> &P : Symtab->ImportFiles) {
-    for (std::unique_ptr<Symbol> &S : P->getSymbols()) {
+    for (std::unique_ptr<SymbolBody> &S : P->getSymbols()) {
       if (auto *Sym = dyn_cast<DefinedImportData>(S.get())) {
         Res[Sym->getDLLName()].push_back(Sym);
         continue;

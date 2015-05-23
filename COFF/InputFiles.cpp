@@ -135,7 +135,7 @@ void ObjectFile::initializeChunks() {
 
 void ObjectFile::initializeSymbols() {
   uint32_t NumSymbols = COFFFile->getNumberOfSymbols();
-  SymbolRefs.resize(NumSymbols);
+  SymSymSym.resize(NumSymbols);
   SparseSymbols.resize(NumSymbols);
   int32_t LastSectionNumber = 0;
   for (uint32_t I = 0; I < NumSymbols; ++I) {
@@ -161,18 +161,18 @@ void ObjectFile::initializeSymbols() {
       AuxP = COFFFile->getSymbol(I + 1)->getRawPtr();
     bool IsFirst = (LastSectionNumber != Sym.getSectionNumber());
 
-    std::unique_ptr<Symbol> SymP(createSymbol(SymbolName, Sym, AuxP, IsFirst));
+    std::unique_ptr<SymbolBody> SymP(createSymbol(SymbolName, Sym, AuxP, IsFirst));
     if (SymP) {
-      SymP->setSymbolRefAddress(&SymbolRefs[I]);
+      SymP->setSymbolAddress(&SymSymSym[I]);
       SparseSymbols[I] = SymP.get();
-      Symbols.push_back(std::move(SymP));
+      SymbolBodies.push_back(std::move(SymP));
     }
     I += Sym.getNumberOfAuxSymbols();
     LastSectionNumber = Sym.getSectionNumber();
   }
 }
 
-Symbol *ObjectFile::createSymbol(StringRef Name, COFFSymbolRef Sym,
+SymbolBody *ObjectFile::createSymbol(StringRef Name, COFFSymbolRef Sym,
                                  const void *AuxP, bool IsFirst) {
   if (Sym.isUndefined())
     return new Undefined(Name);
@@ -242,12 +242,12 @@ void ImportFile::readImplib() {
   StringRef ImpName = Alloc.save(Twine("__imp_") + Name);
   StringRef DLLName(Buf + sizeof(ImportHeader) + Name.size() + 1);
   auto *ImpSym = new DefinedImportData(DLLName, ImpName, Name);
-  Symbols.push_back(std::unique_ptr<DefinedImportData>(ImpSym));
+  SymbolBodies.push_back(std::unique_ptr<DefinedImportData>(ImpSym));
 
   uint16_t TypeInfo = read16le(Buf + offsetof(ImportHeader, TypeInfo));
   int Type = TypeInfo & 0x3;
   if (Type == llvm::COFF::IMPORT_CODE)
-    Symbols.push_back(llvm::make_unique<DefinedImportFunc>(Name, ImpSym));
+    SymbolBodies.push_back(llvm::make_unique<DefinedImportFunc>(Name, ImpSym));
 }
 
 }

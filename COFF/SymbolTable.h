@@ -27,7 +27,7 @@ public:
 
   std::vector<Chunk *> getChunks();
 
-  Symbol *find(StringRef Name);
+  SymbolBody *find(StringRef Name);
   void dump();
 
   std::vector<std::unique_ptr<ImportFile>> ImportFiles;
@@ -37,14 +37,14 @@ private:
   std::error_code addFile(ArchiveFile *File);
   std::error_code addFile(ImportFile *File);
 
-  std::error_code resolve(Symbol *Sym, SymbolRef **Ref);
+  std::error_code resolve(SymbolBody *Sym, Symbol **Ref);
   std::error_code addMemberFile(CanBeDefined *Sym);
-  void addInitialSymbol(Symbol *Sym);
+  void addInitialSymbol(SymbolBody *Sym);
 
-  std::unordered_map<llvm::StringRef, SymbolRef *> Symtab;
+  std::unordered_map<llvm::StringRef, Symbol *> Symtab;
   std::vector<std::unique_ptr<ObjectFile>> ObjectFiles;
   std::vector<std::unique_ptr<ArchiveFile>> ArchiveFiles;
-  std::vector<std::unique_ptr<Symbol>> OwnedSymbols;
+  std::vector<std::unique_ptr<SymbolBody>> OwnedSymbols;
   llvm::BumpPtrAllocator Alloc;
   StringAllocator StringAlloc;
 };
