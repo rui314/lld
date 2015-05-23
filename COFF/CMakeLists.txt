@@ -7,6 +7,7 @@ add_llvm_library(lldCOFF
   Driver.cpp
   InputFiles.cpp
   SymbolTable.cpp
+  Symbols.cpp
   Writer.cpp
   )
 
