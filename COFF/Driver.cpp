@@ -7,9 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Allocator.h"
 #include "Config.h"
 #include "InputFiles.h"
+#include "Memory.h"
 #include "SymbolTable.h"
 #include "Writer.h"
 #include "lld/Core/Error.h"

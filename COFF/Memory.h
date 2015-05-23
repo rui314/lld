@@ -1,4 +1,4 @@
-//===- Alloc.h ------------------------------------------------------------===//
+//===- Memory.h -----------------------------------------------------------===//
 //
 //                             The LLVM Linker
 //
@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLD_COFF_ALLOCATOR_H
-#define LLD_COFF_ALLOCATOR_H
+#ifndef LLD_COFF_MEMORY_H
+#define LLD_COFF_MEMORY_H
 
 #include "lld/Core/LLVM.h"
 #include "llvm/ADT/StringRef.h"

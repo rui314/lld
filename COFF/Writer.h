@@ -12,7 +12,6 @@
 
 #include "InputFiles.h"
 #include "SymbolTable.h"
-#include "llvm/Support/Allocator.h"
 #include "llvm/Support/FileOutputBuffer.h"
 #include <memory>
 #include <vector>
@@ -20,16 +19,7 @@
 namespace lld {
 namespace coff {
 
-const int PageSize = 4096;
-const int FileAlignment = 512;
-const int SectionAlignment = 4096;
 const uint32_t PermMask = 0xF00000F0;
-const int DOSStubSize = 64;
-const int NumberfOfDataDirectory = 16;
-const int HeaderSize = DOSStubSize + sizeof(llvm::COFF::PEMagic)
-  + sizeof(llvm::object::coff_file_header)
-  + sizeof(llvm::object::pe32plus_header)
-  + sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
 
 class OutputSection {
 public:
@@ -41,11 +31,7 @@ public:
   uint64_t getSectionIndex() { return SectionIndex; }
   std::vector<Chunk *> &getChunks() { return Chunks; }
 
-  const llvm::object::coff_section *getHeader() {
-    if (Header.SizeOfRawData == 0)
-      Header.PointerToRawData = 0;
-    return &Header;
-  }
+  const llvm::object::coff_section *getHeader();
   void addPermissions(uint32_t C);
   uint32_t getPermissions() { return Header.Characteristics & PermMask; }
   uint32_t getCharacteristics() { return Header.Characteristics; }
@@ -79,7 +65,7 @@ private:
   OutputSection *findSection(StringRef Name);
   uint32_t getTotalSectionSize(uint32_t Perm);
   OutputSection *createSection(StringRef Name);
-  std::map<StringRef, std::vector<DefinedImportData *>> groupImports();
+  std::map<StringRef, std::vector<DefinedImportData *>> binImports();
 
   SymbolTable *Symtab;
   std::unique_ptr<llvm::FileOutputBuffer> Buffer;

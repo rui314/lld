@@ -10,8 +10,8 @@
 #ifndef LLD_COFF_INPUT_FILES_H
 #define LLD_COFF_INPUT_FILES_H
 
-#include "Allocator.h"
 #include "Chunks.h"
+#include "Memory.h"
 #include "Symbols.h"
 #include "lld/Core/LLVM.h"
 #include "llvm/ADT/ArrayRef.h"

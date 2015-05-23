@@ -25,6 +25,17 @@
 using namespace llvm;
 using namespace llvm::object;
 
+static const int PageSize = 4096;
+static const int FileAlignment = 512;
+static const int SectionAlignment = 4096;
+static const int DOSStubSize = 64;
+static const int NumberfOfDataDirectory = 16;
+static const int HeaderSize = DOSStubSize
+  + sizeof(llvm::COFF::PEMagic)
+  + sizeof(llvm::object::coff_file_header)
+  + sizeof(llvm::object::pe32plus_header)
+  + sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
+
 namespace lld {
 namespace coff {
 
@@ -60,6 +71,12 @@ void OutputSection::addChunk(Chunk *C) {
 
 void OutputSection::addPermissions(uint32_t C) {
   Header.Characteristics = Header.Characteristics | (C & PermMask);
+}
+
+const llvm::object::coff_section *OutputSection::getHeader() {
+  if (Header.SizeOfRawData == 0)
+    Header.PointerToRawData = 0;
+  return &Header;
 }
 
 static StringRef dropDollar(StringRef S) {
@@ -101,13 +118,13 @@ void Writer::createSections() {
   }
 }
 
-std::map<StringRef, std::vector<DefinedImportData *>> Writer::groupImports() {
-  std::map<StringRef, std::vector<DefinedImportData *>> Ret;
+std::map<StringRef, std::vector<DefinedImportData *>> Writer::binImports() {
+  std::map<StringRef, std::vector<DefinedImportData *>> Res;
   OutputSection *Text = createSection(".text");
   for (std::unique_ptr<ImportFile> &P : Symtab->ImportFiles) {
     for (std::unique_ptr<Symbol> &S : P->getSymbols()) {
       if (auto *Sym = dyn_cast<DefinedImportData>(S.get())) {
-        Ret[Sym->getDLLName()].push_back(Sym);
+        Res[Sym->getDLLName()].push_back(Sym);
         continue;
       }
       Text->addChunk(cast<DefinedImportFunc>(S.get())->getChunk());
@@ -118,11 +135,11 @@ std::map<StringRef, std::vector<DefinedImportData *>> Writer::groupImports() {
   auto comp = [](DefinedImportData *A, DefinedImportData *B) {
     return A->getName() < B->getName();
   };
-  for (auto &P : Ret) {
+  for (auto &P : Res) {
     std::vector<DefinedImportData *> &V = P.second;
     std::sort(V.begin(), V.end(), comp);
   }
-  return Ret;
+  return Res;
 }
 
 void Writer::createImportTables() {
@@ -130,7 +147,7 @@ void Writer::createImportTables() {
     return;
 
   std::vector<ImportTable> Tabs;
-  for (auto &P : groupImports()) {
+  for (auto &P : binImports()) {
     StringRef DLLName = P.first;
     std::vector<DefinedImportData *> &Imports = P.second;
     Tabs.emplace_back(DLLName, Imports);

@@ -10,8 +10,8 @@
 #ifndef LLD_COFF_SYMBOL_TABLE_H
 #define LLD_COFF_SYMBOL_TABLE_H
 
-#include "Allocator.h"
 #include "InputFiles.h"
+#include "Memory.h"
 #include "llvm/Support/Allocator.h"
 #include <unordered_map>
 

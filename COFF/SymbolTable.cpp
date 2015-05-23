@@ -7,7 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Allocator.h"
 #include "Config.h"
 #include "SymbolTable.h"
 #include "lld/Core/Error.h"
