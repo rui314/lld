@@ -189,6 +189,7 @@ void ObjectFile::initializeSymbols() {
   uint32_t NumSymbols = COFFFile->getNumberOfSymbols();
   SymbolRefs.resize(NumSymbols);
   std::vector<Symbol *> CreatedSyms(NumSymbols);
+  int32_t LastSectionNumber = 0;
   for (uint32_t I = 0; I < NumSymbols; ++I) {
     // Get a COFFSymbolRef object.
     auto SrefOrErr = COFFFile->getSymbol(I);
@@ -207,6 +208,10 @@ void ObjectFile::initializeSymbols() {
     if (SymbolName == "@comp.id" || SymbolName == "@feat.00")
       continue;
 
+    const void *AuxP = nullptr;
+    if (Sref.getNumberOfAuxSymbols())
+      AuxP = COFFFile->getSymbol(I + 1)->getRawPtr();
+
     std::unique_ptr<Symbol> Sym;
     if (Sref.isUndefined()) {
       Sym.reset(new Undefined(SymbolName));
@@ -217,9 +222,19 @@ void ObjectFile::initializeSymbols() {
     } else if (Sref.getSectionNumber() == -1) {
       Sym.reset(new DefinedAbsolute(SymbolName, Sref.getValue()));
     } else if (Sref.isWeakExternal()) {
-      auto *Aux = (const coff_aux_weak_external *)COFFFile->getSymbol(I + 1)->getRawPtr();
+      auto *Aux = (const coff_aux_weak_external *)AuxP;
       Sym.reset(new Undefined(SymbolName, CreatedSyms[Aux->TagIndex]));
     } else {
+      bool IsFirst = (LastSectionNumber != Sref.getSectionNumber());
+      if (IsFirst && AuxP) {
+        if (std::unique_ptr<Chunk> &C = Chunks[Sref.getSectionNumber()]) {
+          auto *SC = (SectionChunk *)C.get();
+          auto *Aux = (coff_aux_section_definition *)AuxP;
+          auto *Parent = (SectionChunk *)(Chunks[Aux->getNumber(Sref.isBigObj())].get());
+          if (Parent)
+            Parent->addAssociative(SC);
+        }
+      }
       if (std::unique_ptr<Chunk> &C = Chunks[Sref.getSectionNumber()])
         Sym.reset(new DefinedRegular(this, SymbolName, Sref, C.get()));
     }
@@ -229,6 +244,7 @@ void ObjectFile::initializeSymbols() {
       Symbols.push_back(std::move(Sym));
     }
     I += Sref.getNumberOfAuxSymbols();
+    LastSectionNumber = Sref.getSectionNumber();
   }
 }
 
@@ -295,7 +311,7 @@ const uint8_t *SectionChunk::getData() const {
 }
 
 bool SectionChunk::isRoot() {
-  return !(Header->Characteristics & llvm::COFF::IMAGE_SCN_CNT_CODE);
+  return !isCOMDAT() && !IsChild && !(Header->Characteristics & llvm::COFF::IMAGE_SCN_CNT_CODE);
 }
 
 void SectionChunk::markLive() {
@@ -310,6 +326,13 @@ void SectionChunk::markLive() {
     auto *S = cast<Defined>(File->SymbolRefs[Rel->SymbolTableIndex]->Ptr);
     S->markLive();
   }
+  for (Chunk *C : Children)
+    C->markLive();
+}
+
+void SectionChunk::addAssociative(SectionChunk *Child) {
+  Child->IsChild = true;
+  Children.push_back(Child);
 }
 
 void SectionChunk::applyRelocations(uint8_t *Buffer) {

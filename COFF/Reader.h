@@ -102,6 +102,7 @@ public:
   bool isRoot() override;
   void markLive() override;
   bool isLive() override { return isRoot() || Live; }
+  void addAssociative(SectionChunk *Child);
 
 private:
   void applyRelocation(uint8_t *Buffer, const coff_relocation *Rel);
@@ -112,6 +113,8 @@ private:
   StringRef SectionName;
   ArrayRef<uint8_t> Data;
   bool Live = false;
+  std::vector<Chunk *> Children;
+  bool IsChild = false;
 };
 
 class CommonChunk : public Chunk {
