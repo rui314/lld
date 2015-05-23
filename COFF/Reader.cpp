@@ -76,7 +76,7 @@ ErrorOr<std::unique_ptr<InputFile>> CanBeDefined::getMember() {
 bool Undefined::replaceWeakExternal() {
   if (!WeakExternal)
     return false;
-  getSymbolRef()->Ptr = WeakExternal;
+  getSymbolRef()->Ptr = WeakExternal->getSymbolRef()->Ptr;
   return true;
 }
 

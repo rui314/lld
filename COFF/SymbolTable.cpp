@@ -119,8 +119,11 @@ std::error_code SymbolTable::resolve(Symbol *Sym, SymbolRef **RefP) {
     // the same undefined symbol. Undefined symbols don't have much
     // identity, so a selection is arbitrary. We choose the existing
     // one.
-    if (isa<Undefined>(Sym))
+    if (auto *New = dyn_cast<Undefined>(Sym)) {
+      if (New->hasWeakExternal())
+        Ref->Ptr = New;
       return std::error_code();
+    }
 
     // CanBeDefined and Undefined: We read an archive member file
     // pointed by the CanBeDefined symbol to resolve the Undefined
@@ -146,7 +149,11 @@ std::error_code SymbolTable::resolve(Symbol *Sym, SymbolRef **RefP) {
     if (isa<CanBeDefined>(Sym))
       return std::error_code();
 
-    assert(isa<Undefined>(Sym));
+    auto *New = cast<Undefined>(Sym);
+    if (New->hasWeakExternal()) {
+      Ref->Ptr = Sym;
+      return std::error_code();
+    }
     return addMemberFile(Existing);
   }
 

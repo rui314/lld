@@ -317,6 +317,7 @@ public:
   }
 
   bool replaceWeakExternal();
+  bool hasWeakExternal() { return WeakExternal; }
 
 private:
   Symbol *WeakExternal;
