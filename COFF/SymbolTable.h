@@ -39,15 +39,12 @@ private:
 
   std::error_code resolve(Symbol *Sym, SymbolRef **Ref);
   std::error_code addMemberFile(CanBeDefined *Sym);
-
-  std::vector<std::unique_ptr<ObjectFile>> ObjectFiles;
-  std::vector<std::unique_ptr<ArchiveFile>> ArchiveFiles;
-
-  std::unordered_map<llvm::StringRef, SymbolRef *> Symtab;
-
   void addInitialSymbol(Symbol *Sym);
 
-  std::vector<std::unique_ptr<Symbol>> Symbols;
+  std::unordered_map<llvm::StringRef, SymbolRef *> Symtab;
+  std::vector<std::unique_ptr<ObjectFile>> ObjectFiles;
+  std::vector<std::unique_ptr<ArchiveFile>> ArchiveFiles;
+  std::vector<std::unique_ptr<Symbol>> OwnedSymbols;
   llvm::BumpPtrAllocator Alloc;
   StringAllocator StringAlloc;
 };

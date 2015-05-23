@@ -220,7 +220,7 @@ void SymbolTable::dump() {
 }
 
 void SymbolTable::addInitialSymbol(Symbol *Sym) {
-  Symbols.push_back(std::unique_ptr<Symbol>(Sym));
+  OwnedSymbols.push_back(std::unique_ptr<Symbol>(Sym));
   Symtab[Sym->getName()] = new (Alloc) SymbolRef(Sym);
 }
 
