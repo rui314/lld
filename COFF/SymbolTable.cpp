@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Config.h"
+#include "Driver.h"
 #include "SymbolTable.h"
 #include "lld/Core/Error.h"
 #include "llvm/ADT/STLExtras.h"
@@ -16,10 +17,6 @@
 
 namespace lld {
 namespace coff {
-
-std::error_code parseDirectives(StringRef S,
-                                std::vector<std::unique_ptr<InputFile>> *Res,
-                                StringAllocator *Alloc);
 
 SymbolTable::SymbolTable() {
   addInitialSymbol(new DefinedAbsolute("__ImageBase", ImageBase));
@@ -60,7 +57,6 @@ std::error_code SymbolTable::addFile(ObjectFile *File) {
     for (std::unique_ptr<InputFile> &L : Libs)
       addFile(std::move(L));
   }
-  
   return std::error_code();
 }
 

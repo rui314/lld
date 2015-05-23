@@ -39,7 +39,7 @@ ErrorOr<std::unique_ptr<InputFile>> CanBeDefined::getMember() {
   if (MBRef.getBuffer().empty())
     return nullptr;
 
-  file_magic Magic = identify_magic(StringRef(MBRef.getBuffer()));
+  file_magic Magic = identify_magic(MBRef.getBuffer());
   if (Magic == file_magic::coff_import_library)
     return llvm::make_unique<ImportFile>(MBRef);
 

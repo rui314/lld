@@ -8,16 +8,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "Config.h"
+#include "Driver.h"
 #include "InputFiles.h"
 #include "Memory.h"
 #include "SymbolTable.h"
 #include "Writer.h"
 #include "lld/Core/Error.h"
-#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/Twine.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
@@ -25,17 +23,12 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Format.h"
-#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
 #include "llvm/Support/raw_ostream.h"
 #include <memory>
-#include <mutex>
-#include <sstream>
 
 using namespace llvm;
-using llvm::object::COFFObjectFile;
-using llvm::object::coff_section;
 
 // Create enum with OPT_xxx values for each option in Options.td
 enum {
@@ -55,7 +48,7 @@ enum {
 // Create table mapping all options defined in Options.td
 static const llvm::opt::OptTable::Info infoTable[] = {
 #define OPTION(PREFIX, NAME, ID, KIND, GROUP, ALIAS, ALIASARGS, FLAGS, PARAM, \
-               HELPTEXT, METAVAR)   \
+               HELPTEXT, METAVAR) \
   { PREFIX, NAME, HELPTEXT, METAVAR, OPT_##ID, llvm::opt::Option::KIND##Class, \
     PARAM, FLAGS, OPT_##GROUP, OPT_##ALIAS, ALIASARGS },
 #include "Options.inc"
@@ -67,8 +60,7 @@ namespace {
 class COFFOptTable : public llvm::opt::OptTable {
 public:
   COFFOptTable()
-    : OptTable(infoTable, llvm::array_lengthof(infoTable),
-               /* ignoreCase */ true) {}
+    : OptTable(infoTable, llvm::array_lengthof(infoTable), true) {}
 };
 
 class BumpPtrStringSaver : public llvm::cl::StringSaver {
