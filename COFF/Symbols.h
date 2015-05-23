@@ -183,7 +183,7 @@ private:
 
 class Undefined : public Symbol {
 public:
-  Undefined(StringRef Name, Symbol *S = nullptr)
+  Undefined(StringRef Name, Symbol **S = nullptr)
     : Symbol(UndefinedKind, Name), WeakExternal(S) {}
 
   static bool classof(const Symbol *S) {
@@ -194,7 +194,7 @@ public:
   bool hasWeakExternal() { return WeakExternal; }
 
 private:
-  Symbol *WeakExternal;
+  Symbol **WeakExternal;
 };
 
 struct SymbolRef {

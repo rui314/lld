@@ -54,9 +54,9 @@ ErrorOr<std::unique_ptr<InputFile>> CanBeDefined::getMember() {
 }
 
 bool Undefined::replaceWeakExternal() {
-  if (!WeakExternal)
+  if (!WeakExternal || !*WeakExternal)
     return false;
-  getSymbolRef()->Ptr = WeakExternal->getSymbolRef()->Ptr;
+  getSymbolRef()->Ptr = (*WeakExternal)->getSymbolRef()->Ptr;
   return true;
 }
 
@@ -168,20 +168,20 @@ void ObjectFile::initializeChunks() {
 void ObjectFile::initializeSymbols() {
   uint32_t NumSymbols = COFFFile->getNumberOfSymbols();
   SymbolRefs.resize(NumSymbols);
-  std::vector<Symbol *> CreatedSyms(NumSymbols);
+  SparseSymbols.resize(NumSymbols);
   int32_t LastSectionNumber = 0;
   for (uint32_t I = 0; I < NumSymbols; ++I) {
     // Get a COFFSymbolRef object.
-    auto SrefOrErr = COFFFile->getSymbol(I);
-    if (auto EC = SrefOrErr.getError()) {
+    auto SymOrErr = COFFFile->getSymbol(I);
+    if (auto EC = SymOrErr.getError()) {
       llvm::errs() << "broken object file: " << Name << ": " << EC.message() << "\n";
       break;
     }
-    COFFSymbolRef Sref = SrefOrErr.get();
+    COFFSymbolRef Sym = SymOrErr.get();
 
     // Get a symbol name.
     StringRef SymbolName;
-    if (auto EC = COFFFile->getSymbolName(Sref, SymbolName)) {
+    if (auto EC = COFFFile->getSymbolName(Sym, SymbolName)) {
       llvm::errs() << "broken object file: " << Name << ": " << EC.message() << "\n";
       break;
     }
@@ -189,43 +189,49 @@ void ObjectFile::initializeSymbols() {
       continue;
 
     const void *AuxP = nullptr;
-    if (Sref.getNumberOfAuxSymbols())
+    if (Sym.getNumberOfAuxSymbols())
       AuxP = COFFFile->getSymbol(I + 1)->getRawPtr();
+    bool IsFirst = (LastSectionNumber != Sym.getSectionNumber());
 
-    std::unique_ptr<Symbol> Sym;
-    if (Sref.isUndefined()) {
-      Sym.reset(new Undefined(SymbolName));
-    } else if (Sref.isCommon()) {
-      Chunk *C = new CommonChunk(Sref);
-      Chunks.push_back(std::unique_ptr<Chunk>(C));
-      Sym.reset(new DefinedRegular(this, SymbolName, Sref, C));
-    } else if (Sref.getSectionNumber() == -1) {
-      Sym.reset(new DefinedAbsolute(SymbolName, Sref.getValue()));
-    } else if (Sref.isWeakExternal()) {
-      auto *Aux = (const coff_aux_weak_external *)AuxP;
-      Sym.reset(new Undefined(SymbolName, CreatedSyms[Aux->TagIndex]));
-    } else {
-      bool IsFirst = (LastSectionNumber != Sref.getSectionNumber());
-      if (IsFirst && AuxP) {
-        if (std::unique_ptr<Chunk> &C = Chunks[Sref.getSectionNumber()]) {
-          auto *SC = (SectionChunk *)C.get();
-          auto *Aux = (coff_aux_section_definition *)AuxP;
-          auto *Parent = (SectionChunk *)(Chunks[Aux->getNumber(Sref.isBigObj())].get());
-          if (Parent)
-            Parent->addAssociative(SC);
-        }
-      }
-      if (std::unique_ptr<Chunk> &C = Chunks[Sref.getSectionNumber()])
-        Sym.reset(new DefinedRegular(this, SymbolName, Sref, C.get()));
+    std::unique_ptr<Symbol> SymP(createSymbol(SymbolName, Sym, AuxP, IsFirst));
+    if (SymP) {
+      SymP->setSymbolRefAddress(&SymbolRefs[I]);
+      SparseSymbols[I] = SymP.get();
+      Symbols.push_back(std::move(SymP));
     }
-    if (Sym) {
-      Sym->setSymbolRefAddress(&SymbolRefs[I]);
-      CreatedSyms[I] = Sym.get();
-      Symbols.push_back(std::move(Sym));
-    }
-    I += Sref.getNumberOfAuxSymbols();
-    LastSectionNumber = Sref.getSectionNumber();
+    I += Sym.getNumberOfAuxSymbols();
+    LastSectionNumber = Sym.getSectionNumber();
   }
+}
+
+Symbol *ObjectFile::createSymbol(StringRef Name, COFFSymbolRef Sym,
+                                 const void *AuxP, bool IsFirst) {
+  if (Sym.isUndefined())
+    return new Undefined(Name);
+  if (Sym.isCommon()) {
+    Chunk *C = new CommonChunk(Sym);
+    Chunks.push_back(std::unique_ptr<Chunk>(C));
+    return new DefinedRegular(this, Name, Sym, C);
+  }
+  if (Sym.getSectionNumber() == -1) {
+    return new DefinedAbsolute(Name, Sym.getValue());
+  }
+  if (Sym.isWeakExternal()) {
+    auto *Aux = (const coff_aux_weak_external *)AuxP;
+    return new Undefined(Name, &SparseSymbols[Aux->TagIndex]);
+  }
+  if (IsFirst && AuxP) {
+    if (std::unique_ptr<Chunk> &C = Chunks[Sym.getSectionNumber()]) {
+      auto *SC = (SectionChunk *)C.get();
+      auto *Aux = (coff_aux_section_definition *)AuxP;
+      auto *Parent = (SectionChunk *)(Chunks[Aux->getNumber(Sym.isBigObj())].get());
+      if (Parent)
+        Parent->addAssociative(SC);
+    }
+  }
+  if (std::unique_ptr<Chunk> &C = Chunks[Sym.getSectionNumber()])
+    return new DefinedRegular(this, Name, Sym, C.get());
+  return nullptr;
 }
 
 ErrorOr<std::unique_ptr<ObjectFile>>

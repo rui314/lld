@@ -84,6 +84,7 @@ public:
 
   std::string Name;
   std::vector<std::unique_ptr<Symbol>> Symbols;
+  std::vector<Symbol *> SparseSymbols;
   std::vector<SymbolRef *> SymbolRefs;
   std::vector<std::unique_ptr<Chunk>> Chunks;
   std::unique_ptr<COFFObjectFile> COFFFile;
@@ -92,6 +93,9 @@ private:
   ObjectFile(StringRef Name, std::unique_ptr<COFFObjectFile> File);
   void initializeChunks();
   void initializeSymbols();
+
+  Symbol *createSymbol(StringRef Name, COFFSymbolRef Sym,
+                       const void *Aux, bool IsFirst);
 
   std::unique_ptr<MemoryBuffer> MB;
   StringRef Directives;

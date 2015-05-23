@@ -14,7 +14,6 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/Allocator.h"
-#include <mutex>
 #include <memory>
 
 namespace lld {
@@ -22,8 +21,8 @@ namespace coff {
 
 class StringAllocator {
 public:
+  // Returns a null-terminated copy of a string.
   StringRef save(StringRef S) {
-    std::lock_guard<std::mutex> Lock(Mutex);
     char *P = Alloc.Allocate<char>(S.size() + 1);
     memcpy(P, S.data(), S.size());
     P[S.size()] = '\0';
@@ -35,7 +34,6 @@ public:
 
 private:
   llvm::BumpPtrAllocator Alloc;
-  std::mutex Mutex;
 };
 
 } // namespace coff
