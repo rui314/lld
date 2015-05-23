@@ -8,7 +8,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "Allocator.h"
-#include "CommandLine.h"
 #include "Config.h"
 #include "Files.h"
 #include "SymbolTable.h"
@@ -114,6 +113,27 @@ namespace lld {
 namespace coff {
 
 Configuration *Config;
+
+ErrorOr<std::unique_ptr<llvm::opt::InputArgList>>
+parseArgs(int Argc, const char *Argv[]) {
+  COFFOptTable Table;
+  unsigned MissingIndex;
+  unsigned MissingCount;
+  std::unique_ptr<llvm::opt::InputArgList> Args(
+      Table.ParseArgs(&Argv[1], &Argv[Argc], MissingIndex, MissingCount));
+  if (MissingCount) {
+    std::string S;
+    llvm::raw_string_ostream OS(S);
+    OS << llvm::format("missing arg value for \"%s\", expected %d argument%s.",
+                       Args->getArgString(MissingIndex),
+                       MissingCount, (MissingCount == 1 ? "" : "s"));
+    OS.flush();
+    return lld::make_dynamic_error_code(StringRef(S));
+  }
+  for (auto *Arg : Args->filtered(OPT_UNKNOWN))
+    llvm::errs() << "ignoring unknown argument: " << Arg->getSpelling() << "\n";
+  return std::move(Args);
+}
 
 std::string findLib(StringRef Filename) {
   if (llvm::sys::fs::exists(Filename))
