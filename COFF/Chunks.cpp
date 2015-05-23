@@ -150,5 +150,39 @@ void ImportFuncChunk::applyRelocations(uint8_t *Buffer) {
   write32le(Buffer + FileOff + 2, Operand);
 }
 
+HintNameChunk::HintNameChunk(StringRef Name)
+  : Data(new std::vector<uint8_t>(llvm::RoundUpToAlignment(Name.size() + 4, 2))) {
+  memcpy(&((*Data)[2]), Name.data(), Name.size());
+}
+
+void LookupChunk::applyRelocations(uint8_t *Buffer) {
+  write32le(Buffer + getFileOff(), HintName->getRVA());
+}
+
+void DirectoryChunk::applyRelocations(uint8_t *Buffer) {
+  auto *E = (llvm::COFF::ImportDirectoryTableEntry *)(Buffer + getFileOff());
+  E->ImportLookupTableRVA = LookupTab->getRVA();
+  E->NameRVA = DLLName->getRVA();
+  E->ImportAddressTableRVA = AddressTab->getRVA();
+}
+
+ImportTable::ImportTable(StringRef N, std::vector<DefinedImportData *> &Symbols) {
+  DLLName = new StringChunk(N);
+  DirTab = new DirectoryChunk(DLLName);
+  for (DefinedImportData *S : Symbols)
+    HintNameTables.push_back(new HintNameChunk(S->getExportName()));
+
+  for (HintNameChunk *H : HintNameTables) {
+    LookupTables.push_back(new LookupChunk(H));
+    AddressTables.push_back(new LookupChunk(H));
+  }
+
+  for (int I = 0, E = Symbols.size(); I < E; ++I)
+    Symbols[I]->setLocation(AddressTables[I]);
+
+  DirTab->LookupTab = LookupTables[0];
+  DirTab->AddressTab = AddressTables[0];
+}
+
 }
 }

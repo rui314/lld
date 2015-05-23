@@ -8,7 +8,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "Config.h"
-#include "ImportTable.h"
 #include "Reader.h"
 #include "Writer.h"
 #include "lld/Core/Error.h"
