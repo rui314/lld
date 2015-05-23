@@ -215,7 +215,8 @@ void SymbolTable::dump() {
     StringRef Name = P.first;
     SymbolRef *Ref = P.second;
     if (auto *Sym = dyn_cast<Defined>(Ref->Ptr))
-      llvm::dbgs() << "0x" << Twine::utohexstr(ImageBase + Sym->getRVA()) << " " << Sym->getName() << "\n";
+      llvm::dbgs() << "0x" << Twine::utohexstr(ImageBase + Sym->getRVA())
+                   << " " << Sym->getName() << "\n";
   }
 }
 
