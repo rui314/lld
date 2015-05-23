@@ -9,7 +9,7 @@
 
 #include "Allocator.h"
 #include "Config.h"
-#include "Files.h"
+#include "InputFiles.h"
 #include "SymbolTable.h"
 #include "Writer.h"
 #include "lld/Core/Error.h"

@@ -1,4 +1,4 @@
-//===- Files.cpp ----------------------------------------------------------===//
+//===- InputFiles.cpp -----------------------------------------------------===//
 //
 //                             The LLVM Linker
 //
@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Chunks.h"
-#include "Files.h"
+#include "InputFiles.h"
 #include "Writer.h"
 #include "lld/Core/Error.h"
 #include "llvm/ADT/STLExtras.h"

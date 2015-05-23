@@ -5,7 +5,7 @@ add_public_tablegen_target(COFFOptionsTableGen)
 add_llvm_library(lldCOFF
   Chunks.cpp
   Driver.cpp
-  Files.cpp
+  InputFiles.cpp
   SymbolTable.cpp
   Writer.cpp
   )

@@ -1,4 +1,4 @@
-//===- Files.h ------------------------------------------------------------===//
+//===- InputFiles.h -------------------------------------------------------===//
 //
 //                             The LLVM Linker
 //
@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLD_COFF_FILES_H
-#define LLD_COFF_FILES_H
+#ifndef LLD_COFF_INPUT_FILES_H
+#define LLD_COFF_INPUT_FILES_H
 
 #include "Allocator.h"
 #include "Chunks.h"
