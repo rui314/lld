@@ -24,9 +24,6 @@ using llvm::RoundUpToAlignment;
 namespace lld {
 namespace coff {
 
-DefinedRegular::DefinedRegular(ObjectFile *F, StringRef Name, COFFSymbolRef S, Chunk *C)
-  : Defined(DefinedRegularKind, Name), File(F), Sym(S), Section(C) {}
-
 bool DefinedRegular::isCommon() const {
   return Section->isCommon();
 }
@@ -302,7 +299,7 @@ SectionChunk::SectionChunk(ObjectFile *F, const coff_section *H, uint32_t SI)
   if (!isBSS())
     File->COFFFile->getSectionContents(Header, Data);
   unsigned Shift = ((Header->Characteristics & 0x00F00000) >> 20) - 1;
-  setAlign(uint32_t(1) << Shift);
+  Align = uint32_t(1) << Shift;
 }
 
 const uint8_t *SectionChunk::getData() const {
@@ -341,7 +338,7 @@ void SectionChunk::applyRelocations(uint8_t *Buffer) {
   COFFObjectFile *FP = File->COFFFile.get();
   for (const auto &I : SectionRef(Ref, FP).relocations()) {
     const coff_relocation *Rel = FP->getCOFFRelocation(I);
-    applyRelocation(Buffer, Rel);
+    applyReloc(Buffer, Rel);
   }
 }
 
@@ -349,13 +346,12 @@ static void add16(uint8_t *L, int32_t V) { write16le(L, read16le(L) + V); }
 static void add32(uint8_t *L, int32_t V) { write32le(L, read32le(L) + V); }
 static void add64(uint8_t *L, int64_t V) { write64le(L, read64le(L) + V); }
 
-void SectionChunk::applyRelocation(uint8_t *Buffer, const coff_relocation *Rel) {
+void SectionChunk::applyReloc(uint8_t *Buffer, const coff_relocation *Rel) {
   using namespace llvm::COFF;
-
-  uint8_t *Off = Buffer + getFileOff() + Rel->VirtualAddress;
+  uint8_t *Off = Buffer + FileOff + Rel->VirtualAddress;
   auto *Sym = cast<Defined>(File->SymbolRefs[Rel->SymbolTableIndex]->Ptr);
   uint64_t S = Sym->getRVA();
-  uint64_t P = getRVA() + Rel->VirtualAddress;
+  uint64_t P = RVA + Rel->VirtualAddress;
   OutputSection *Sec = getOutputSection();
   switch (Rel->Type) {
   case IMAGE_REL_AMD64_ADDR32:   add32(Off, ImageBase + S); break;
@@ -417,8 +413,8 @@ uint32_t CommonChunk::getPermissions() const {
 }
 
 void ImportFuncChunk::applyRelocations(uint8_t *Buffer) {
-  uint32_t Operand = ImpSymbol->getRVA() - getRVA() - Data.size();
-  write32le(Buffer + getFileOff() + 2, Operand);
+  uint32_t Operand = ImpSymbol->getRVA() - RVA - Data.size();
+  write32le(Buffer + FileOff + 2, Operand);
 }
 
 OutputSection::OutputSection(StringRef N, uint32_t SI)

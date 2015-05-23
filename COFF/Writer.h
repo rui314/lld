@@ -33,8 +33,8 @@ public:
   std::error_code write(StringRef Path);
 
 private:
-  void markChunks();
-  void groupSections();
+  void markLive();
+  void createSections();
   void createImportTables();
   void assignAddresses();
   void removeEmptySections();
@@ -57,9 +57,8 @@ private:
   Chunk *ImportAddressTable = nullptr;
   uint32_t ImportAddressTableSize = 0;
 
-  uint64_t EndOfSectionTable;
-  uint64_t SectionTotalSizeDisk;
-  uint64_t SectionTotalSizeMemory;
+  uint64_t FileSize;
+  uint64_t SizeOfImage;
 
   std::vector<std::unique_ptr<Chunk>> Chunks;
 };

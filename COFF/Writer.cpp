@@ -34,14 +34,14 @@ static StringRef dropDollar(StringRef S) {
   return S.substr(0, S.find('$'));
 }
 
-void Writer::markChunks() {
+void Writer::markLive() {
   cast<Defined>(Symtab->find("mainCRTStartup"))->markLive();
   for (Chunk *C : Symtab->getChunks())
     if (C->isRoot())
       C->markLive();
 }
 
-void Writer::groupSections() {
+void Writer::createSections() {
   std::map<StringRef, std::vector<Chunk *>> Map;
   for (Chunk *C : Symtab->getChunks()) {
     if (C->isLive()) {
@@ -153,21 +153,18 @@ void Writer::removeEmptySections() {
 }
 
 void Writer::assignAddresses() {
-  EndOfSectionTable = RoundUpToAlignment(
+  uint64_t HeaderEnd = RoundUpToAlignment(
     HeaderSize + sizeof(coff_section) * OutputSections.size(), PageSize);
-
   uint64_t RVA = 0x1000;
-  uint64_t FileOff = EndOfSectionTable;
-  uint64_t InitRVA = RVA;
-  uint64_t InitFileOff = FileOff;
-  for (std::unique_ptr<OutputSection> &Out : OutputSections) {
-    Out->setRVA(RVA);
-    Out->setFileOffset(FileOff);
-    RVA += RoundUpToAlignment(Out->getVirtualSize(), PageSize);
-    FileOff += RoundUpToAlignment(Out->getRawSize(), FileAlignment);
+  uint64_t FileOff = HeaderEnd;
+  for (std::unique_ptr<OutputSection> &Sec : OutputSections) {
+    Sec->setRVA(RVA);
+    Sec->setFileOffset(FileOff);
+    RVA += RoundUpToAlignment(Sec->getVirtualSize(), PageSize);
+    FileOff += RoundUpToAlignment(Sec->getRawSize(), FileAlignment);
   }
-  SectionTotalSizeMemory = RoundUpToAlignment(RVA - InitRVA, PageSize);
-  SectionTotalSizeDisk = RoundUpToAlignment(FileOff - InitFileOff, FileAlignment);
+  SizeOfImage = HeaderEnd + RoundUpToAlignment(RVA - 0x1000, PageSize);
+  FileSize = HeaderEnd + RoundUpToAlignment(FileOff - HeaderEnd, FileAlignment);
 }
 
 void Writer::writeHeader() {
@@ -206,7 +203,7 @@ void Writer::writeHeader() {
   PE->MajorOperatingSystemVersion = 6;
   PE->MajorSubsystemVersion = 6;
   PE->Subsystem = llvm::COFF::IMAGE_SUBSYSTEM_WINDOWS_CUI;
-  PE->SizeOfImage = EndOfSectionTable + SectionTotalSizeMemory;
+  PE->SizeOfImage = SizeOfImage;
   uint64_t Entry = cast<Defined>(Symtab->find("mainCRTStartup"))->getRVA();
   PE->AddressOfEntryPoint = Entry;
   PE->SizeOfStackReserve = 1024 * 1024;
@@ -242,9 +239,8 @@ void Writer::writeHeader() {
 }
 
 std::error_code Writer::openFile(StringRef Path) {
-  uint64_t Size = EndOfSectionTable + SectionTotalSizeDisk;
   if (auto EC = FileOutputBuffer::create(
-        Path, Size, Buffer, FileOutputBuffer::F_executable))
+        Path, FileSize, Buffer, FileOutputBuffer::F_executable))
     return make_dynamic_error_code(Twine("Failed to open ") + Path + ": " + EC.message());
   return std::error_code();
 }
@@ -306,8 +302,8 @@ void Writer::applyRelocations() {
 }
 
 std::error_code Writer::write(StringRef OutputPath) {
-  markChunks();
-  groupSections();
+  markLive();
+  createSections();
   createImportTables();
   assignAddresses();
   removeEmptySections();

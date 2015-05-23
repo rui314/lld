@@ -57,7 +57,7 @@ public:
 
   virtual const uint8_t *getData() const = 0;
   virtual size_t getSize() const = 0;
-  virtual void applyRelocations(uint8_t *Buffer) = 0;
+  virtual void applyRelocations(uint8_t *Buffer) {}
   virtual bool isBSS() const { return false; }
   virtual bool isCOMDAT() const { return false; }
   virtual bool isCommon() const { return false; }
@@ -71,18 +71,19 @@ public:
 
   uint64_t getRVA() { return RVA; }
   uint64_t getFileOff() { return FileOff; }
-  uint64_t getAlign() { return Align; }
+  uint32_t getAlign() { return Align; }
   void setRVA(uint64_t V) { RVA = V; }
   void setFileOff(uint64_t V) { FileOff = V; }
-  void setAlign(uint64_t V) { Align = V; }
 
   void setOutputSection(OutputSection *O) { Out = O; }
   OutputSection *getOutputSection() { return Out; }
 
-private:
+protected:
+  uint32_t Align = 1;
   uint64_t RVA = 0;
   uint64_t FileOff = 0;
-  uint64_t Align = 1;
+
+private:
   OutputSection *Out = nullptr;
 };
 
@@ -105,7 +106,7 @@ public:
   void addAssociative(SectionChunk *Child);
 
 private:
-  void applyRelocation(uint8_t *Buffer, const coff_relocation *Rel);
+  void applyReloc(uint8_t *Buffer, const coff_relocation *Rel);
 
   ObjectFile *File;
   const coff_section *Header;
@@ -122,7 +123,6 @@ public:
   CommonChunk(const COFFSymbolRef S) : Sym(S) {}
   const uint8_t *getData() const override { unimplemented(); }
   size_t getSize() const override;
-  void applyRelocations(uint8_t *Buffer) override {}
   bool isBSS() const override { return true; }
   bool isCommon() const override { return true; }
   uint32_t getPermissions() const override;
@@ -141,7 +141,6 @@ public:
 
   const uint8_t *getData() const override { return &Data[0]; }
   size_t getSize() const override { return Data.size(); }
-  void applyRelocations(uint8_t *Buffer) override {}
 
 private:
   std::vector<uint8_t> Data;
@@ -214,7 +213,8 @@ public:
 
 class DefinedRegular : public Defined {
 public:
-  DefinedRegular(ObjectFile *File, StringRef Name, COFFSymbolRef Sym, Chunk *C);
+  DefinedRegular(ObjectFile *F, StringRef Name, COFFSymbolRef S, Chunk *C)
+    : Defined(DefinedRegularKind, Name), File(F), Sym(S), Section(C) {}
 
   static bool classof(const Symbol *S) {
     return S->kind() == DefinedRegularKind;
