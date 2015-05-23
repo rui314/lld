@@ -124,6 +124,7 @@ void Writer::createImportTables() {
     for (LookupChunk *C : T.AddressTables)
       Idata->addChunk(C);
     Idata->addChunk(new NullChunk(8));
+    ImportAddressTableSize += (T.AddressTables.size() + 1) * 8;
   }
   ImportAddressTable = Tabs[0].AddressTables[0];
 
@@ -217,8 +218,8 @@ void Writer::writeHeader() {
     PE->BaseOfCode = Text->getRVA();
     PE->SizeOfCode = Text->getRawSize();
   }
-  if (OutputSection *Data = findSection(".data"))
-    PE->SizeOfInitializedData = Data->getRawSize();
+  PE->SizeOfInitializedData = getTotalSectionSize(llvm::COFF::IMAGE_SCN_CNT_INITIALIZED_DATA);
+  PE->SizeOfUninitializedData = getTotalSectionSize(llvm::COFF::IMAGE_SCN_CNT_UNINITIALIZED_DATA);
 
   // Write data directory
   DataDirectory = reinterpret_cast<data_directory *>(P);
@@ -228,7 +229,7 @@ void Writer::writeHeader() {
     DataDirectory[IMPORT_TABLE].RelativeVirtualAddress = Idata->getRVA();
     DataDirectory[IMPORT_TABLE].Size = Idata->getVirtualSize();
     DataDirectory[IAT].RelativeVirtualAddress = ImportAddressTable->getRVA();
-    DataDirectory[IAT].Size = ImportAddressTable->getSize();
+    DataDirectory[IAT].Size = ImportAddressTableSize;
   }
 
   // The section table immediately follows the data directory.
@@ -264,6 +265,14 @@ OutputSection *Writer::findSection(StringRef Name) {
     if (S->getName() == Name)
       return S.get();
   return nullptr;
+}
+
+uint32_t Writer::getTotalSectionSize(uint32_t Perm) {
+  uint32_t Res = 0;
+  for (std::unique_ptr<OutputSection> &S : OutputSections)
+    if (S->getPermissions() & Perm)
+      Res += S->getRawSize();
+  return Res;
 }
 
 OutputSection *Writer::createSection(StringRef Name) {

@@ -43,6 +43,7 @@ private:
   void writeSections();
   void applyRelocations();
   OutputSection *findSection(StringRef Name);
+  uint32_t getTotalSectionSize(uint32_t Perm);
   OutputSection *createSection(StringRef Name);
   std::map<StringRef, std::vector<DefinedImportData *>> groupImports();
 
@@ -54,6 +55,7 @@ private:
   llvm::object::coff_section *SectionTable;
   std::vector<std::unique_ptr<OutputSection>> OutputSections;
   Chunk *ImportAddressTable = nullptr;
+  uint32_t ImportAddressTableSize = 0;
 
   uint64_t EndOfSectionTable;
   uint64_t SectionTotalSizeDisk;
