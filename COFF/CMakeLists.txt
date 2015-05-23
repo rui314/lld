@@ -6,7 +6,7 @@ add_llvm_library(lldCOFF
   Chunks.cpp
   CommandLine.cpp
   Driver.cpp
-  Reader.cpp
+  Files.cpp
   SymbolTable.cpp
   Writer.cpp
   )

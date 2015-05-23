@@ -10,7 +10,7 @@
 #ifndef LLD_COFF_WRITER_H
 #define LLD_COFF_WRITER_H
 
-#include "Reader.h"
+#include "Files.h"
 #include "SymbolTable.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/FileOutputBuffer.h"
@@ -20,6 +20,10 @@
 namespace lld {
 namespace coff {
 
+const int PageSize = 4096;
+const int FileAlignment = 512;
+const int SectionAlignment = 4096;
+const uint32_t PermMask = 0xF00000F0;
 const int DOSStubSize = 64;
 const int NumberfOfDataDirectory = 16;
 const int HeaderSize = DOSStubSize + sizeof(llvm::COFF::PEMagic)

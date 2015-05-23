@@ -11,7 +11,7 @@
 #define LLD_COFF_SYMBOL_TABLE_H
 
 #include "Allocator.h"
-#include "Reader.h"
+#include "Files.h"
 #include "llvm/Support/Allocator.h"
 #include <unordered_map>
 

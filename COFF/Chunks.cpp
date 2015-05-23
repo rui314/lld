@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Chunks.h"
-#include "Reader.h"
+#include "Files.h"
 #include "Writer.h"
 #include "lld/Core/Error.h"
 #include "llvm/ADT/STLExtras.h"

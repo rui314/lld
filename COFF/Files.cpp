@@ -1,4 +1,4 @@
-//===- Reader.cpp ---------------------------------------------------------===//
+//===- Files.cpp ----------------------------------------------------------===//
 //
 //                             The LLVM Linker
 //
@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Chunks.h"
-#include "Reader.h"
+#include "Files.h"
 #include "Writer.h"
 #include "lld/Core/Error.h"
 #include "llvm/ADT/STLExtras.h"
@@ -22,6 +22,8 @@ using namespace llvm::object;
 using namespace llvm::support::endian;
 using llvm::COFF::ImportHeader;
 using llvm::RoundUpToAlignment;
+using llvm::sys::fs::identify_magic;
+using llvm::sys::fs::file_magic;
 
 namespace lld {
 namespace coff {

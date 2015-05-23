@@ -10,7 +10,7 @@
 #include "Allocator.h"
 #include "CommandLine.h"
 #include "Config.h"
-#include "Reader.h"
+#include "Files.h"
 #include "SymbolTable.h"
 #include "Writer.h"
 #include "lld/Core/Error.h"
