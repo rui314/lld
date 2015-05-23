@@ -54,9 +54,8 @@ public:
   virtual bool isExternal() { return true; }
   StringRef getName() { return Name; }
 
-  void setSymbolAddress(Symbol **PP) { SymbolRefPP = PP; }
-  void setSymbol(Symbol *P) { *SymbolRefPP = P; }
-  Symbol *getSymbol() { return *SymbolRefPP; }
+  void setBackref(Symbol *P) { Backref = P; }
+  Symbol *getSymbol() { return Backref; }
 
 protected:
   SymbolBody(Kind K, StringRef N) : SymbolKind(K), Name(N) {}
@@ -64,7 +63,7 @@ protected:
 private:
   const Kind SymbolKind;
   StringRef Name;
-  Symbol **SymbolRefPP = nullptr;
+  Symbol *Backref = nullptr;
 };
 
 class Defined : public SymbolBody {

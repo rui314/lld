@@ -36,16 +36,16 @@ std::error_code SymbolTable::addFile(std::unique_ptr<InputFile> File) {
 
 std::error_code SymbolTable::addFile(ObjectFile *File) {
   ObjectFiles.emplace_back(File);
-  for (std::unique_ptr<SymbolBody> &Sym : File->getSymbols()) {
-    if (Sym->isExternal()) {
+  for (std::unique_ptr<SymbolBody> &Body : File->getSymbols()) {
+    if (Body->isExternal()) {
       // Only externally-visible symbols are subjects of symbol
       // resolution.
-      Symbol *Ref;
-      if (auto EC = resolve(Sym.get(), &Ref))
+      Symbol *Sym;
+      if (auto EC = resolve(Body.get(), &Sym))
         return EC;
-      Sym->setSymbol(Ref);
+      Body->setBackref(Sym);
     } else {
-      Sym->setSymbol(new (Alloc) Symbol(Sym.get()));
+      Body->setBackref(new (Alloc) Symbol(Body.get()));
     }
   }
 

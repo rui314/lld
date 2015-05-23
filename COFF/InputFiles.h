@@ -84,12 +84,11 @@ public:
   std::vector<std::unique_ptr<SymbolBody>> &getSymbols() override {
     return SymbolBodies;
   }
+  Symbol *getSymbol(uint32_t SymbolIndex);
   StringRef getDirectives() { return Directives; }
 
   std::string Name;
   std::vector<std::unique_ptr<SymbolBody>> SymbolBodies;
-  std::vector<SymbolBody *> SparseSymbols;
-  std::vector<Symbol *> Symbols;
   std::vector<std::unique_ptr<Chunk>> Chunks;
   std::unique_ptr<COFFObjectFile> COFFFile;
 
@@ -103,6 +102,7 @@ private:
 
   std::unique_ptr<MemoryBuffer> MB;
   StringRef Directives;
+  std::vector<SymbolBody *> SparseSymbolBodies;
 };
 
 class ImportFile : public InputFile {

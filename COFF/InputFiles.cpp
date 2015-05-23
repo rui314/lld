@@ -105,6 +105,10 @@ ObjectFile::ObjectFile(StringRef N, std::unique_ptr<COFFObjectFile> F)
   initializeSymbols();
 }
 
+Symbol *ObjectFile::getSymbol(uint32_t SymbolIndex) {
+  return SparseSymbolBodies[SymbolIndex]->getSymbol();
+}
+
 void ObjectFile::initializeChunks() {
   uint32_t NumSections = COFFFile->getNumberOfSections();
   Chunks.resize(NumSections + 1);
@@ -135,8 +139,7 @@ void ObjectFile::initializeChunks() {
 
 void ObjectFile::initializeSymbols() {
   uint32_t NumSymbols = COFFFile->getNumberOfSymbols();
-  Symbols.resize(NumSymbols);
-  SparseSymbols.resize(NumSymbols);
+  SparseSymbolBodies.resize(NumSymbols);
   int32_t LastSectionNumber = 0;
   for (uint32_t I = 0; I < NumSymbols; ++I) {
     // Get a COFFSymbolRef object.
@@ -163,8 +166,7 @@ void ObjectFile::initializeSymbols() {
 
     std::unique_ptr<SymbolBody> Body(createSymbolBody(SymbolName, Sym, AuxP, IsFirst));
     if (Body) {
-      Body->setSymbolAddress(&Symbols[I]);
-      SparseSymbols[I] = Body.get();
+      SparseSymbolBodies[I] = Body.get();
       SymbolBodies.push_back(std::move(Body));
     }
     I += Sym.getNumberOfAuxSymbols();
@@ -186,7 +188,7 @@ SymbolBody *ObjectFile::createSymbolBody(StringRef Name, COFFSymbolRef Sym,
   }
   if (Sym.isWeakExternal()) {
     auto *Aux = (const coff_aux_weak_external *)AuxP;
-    return new Undefined(Name, &SparseSymbols[Aux->TagIndex]);
+    return new Undefined(Name, &SparseSymbolBodies[Aux->TagIndex]);
   }
   if (IsFirst && AuxP) {
     if (std::unique_ptr<Chunk> &C = Chunks[Sym.getSectionNumber()]) {
