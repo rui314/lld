@@ -82,8 +82,8 @@ static void add64(uint8_t *L, int64_t V) { write64le(L, read64le(L) + V); }
 void SectionChunk::applyReloc(uint8_t *Buffer, const coff_relocation *Rel) {
   using namespace llvm::COFF;
   uint8_t *Off = Buffer + FileOff + Rel->VirtualAddress;
-  auto *Sym = cast<Defined>(File->getSymbol(Rel->SymbolTableIndex)->Body);
-  uint64_t S = Sym->getRVA();
+  auto *Body = cast<Defined>(File->getSymbol(Rel->SymbolTableIndex)->Body);
+  uint64_t S = Body->getRVA();
   uint64_t P = RVA + Rel->VirtualAddress;
   OutputSection *Sec = getOutputSection();
   switch (Rel->Type) {

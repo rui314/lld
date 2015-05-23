@@ -37,9 +37,9 @@ private:
   std::error_code addFile(ArchiveFile *File);
   std::error_code addFile(ImportFile *File);
 
-  std::error_code resolve(SymbolBody *Sym, Symbol **Ref);
-  std::error_code addMemberFile(CanBeDefined *Sym);
-  void addInitialSymbol(SymbolBody *Sym);
+  std::error_code resolve(SymbolBody *Body, Symbol **Ref);
+  std::error_code addMemberFile(CanBeDefined *Body);
+  void addInitialSymbol(SymbolBody *Body);
 
   std::unordered_map<llvm::StringRef, Symbol *> Symtab;
   std::vector<std::unique_ptr<ObjectFile>> ObjectFiles;

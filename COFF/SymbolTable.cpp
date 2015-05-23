@@ -62,16 +62,16 @@ std::error_code SymbolTable::addFile(ObjectFile *File) {
 
 std::error_code SymbolTable::addFile(ArchiveFile *File) {
   ArchiveFiles.emplace_back(File);
-  for (std::unique_ptr<SymbolBody> &Sym : File->getSymbols())
-    if (auto EC = resolve(Sym.get(), nullptr))
+  for (std::unique_ptr<SymbolBody> &Body : File->getSymbols())
+    if (auto EC = resolve(Body.get(), nullptr))
       return EC;
   return std::error_code();
 }
 
 std::error_code SymbolTable::addFile(ImportFile *File) {
   ImportFiles.emplace_back(File);
-  for (std::unique_ptr<SymbolBody> &Sym : File->getSymbols())
-    if (auto EC = resolve(Sym.get(), nullptr))
+  for (std::unique_ptr<SymbolBody> &Body : File->getSymbols())
+    if (auto EC = resolve(Body.get(), nullptr))
       return EC;
   return std::error_code();
 }
@@ -94,8 +94,8 @@ bool SymbolTable::reportRemainingUndefines() {
 // This function resolves conflicts if a given symbol has the same
 // name as an existing symbol. Decisions are made based on symbol
 // types.
-std::error_code SymbolTable::resolve(SymbolBody *Sym, Symbol **RefP) {
-  StringRef Name = Sym->getName();
+std::error_code SymbolTable::resolve(SymbolBody *Body, Symbol **RefP) {
+  StringRef Name = Body->getName();
   auto *NewVal = new (Alloc) Symbol();
   auto Res = Symtab.insert(std::make_pair(Name, NewVal));
   Symbol *Ref = Res.second ? NewVal : Res.first->second;
@@ -107,7 +107,7 @@ std::error_code SymbolTable::resolve(SymbolBody *Sym, Symbol **RefP) {
 
   // If nothing exists yet, just add a new one.
   if (Ref->Body == nullptr) {
-    Ref->Body = Sym;
+    Ref->Body = Body;
     return std::error_code();
   }
 
@@ -116,7 +116,7 @@ std::error_code SymbolTable::resolve(SymbolBody *Sym, Symbol **RefP) {
     // the same undefined symbol. Undefined symbols don't have much
     // identity, so a selection is arbitrary. We choose the existing
     // one.
-    if (auto *New = dyn_cast<Undefined>(Sym)) {
+    if (auto *New = dyn_cast<Undefined>(Body)) {
       if (New->getWeakAlias())
         Ref->Body = New;
       return std::error_code();
@@ -125,30 +125,30 @@ std::error_code SymbolTable::resolve(SymbolBody *Sym, Symbol **RefP) {
     // CanBeDefined and Undefined: We read an archive member file
     // pointed by the CanBeDefined symbol to resolve the Undefined
     // symbol.
-    if (auto *New = dyn_cast<CanBeDefined>(Sym))
+    if (auto *New = dyn_cast<CanBeDefined>(Body))
       return addMemberFile(New);
 
     // Undefined and Defined: An undefined symbol is now being
     // resolved. Select the Defined symbol.
-    assert(isa<Defined>(Sym));
-    Ref->Body = Sym;
+    assert(isa<Defined>(Body));
+    Ref->Body = Body;
     return std::error_code();
   }
 
   if (auto *Existing = dyn_cast<CanBeDefined>(Ref->Body)) {
-    if (isa<Defined>(Sym)) {
-      Ref->Body = Sym;
+    if (isa<Defined>(Body)) {
+      Ref->Body = Body;
       return std::error_code();
     }
 
     // CanBeDefined and CanBeDefined: We have two libraries having the
     // same symbol. We probably should print a warning message.
-    if (isa<CanBeDefined>(Sym))
+    if (isa<CanBeDefined>(Body))
       return std::error_code();
 
-    auto *New = cast<Undefined>(Sym);
+    auto *New = cast<Undefined>(Body);
     if (New->getWeakAlias()) {
-      Ref->Body = Sym;
+      Ref->Body = Body;
       return std::error_code();
     }
     return addMemberFile(Existing);
@@ -157,9 +157,9 @@ std::error_code SymbolTable::resolve(SymbolBody *Sym, Symbol **RefP) {
   // Both symbols are defined symbols. Select one of them if they are
   // Common or COMDAT symbols.
   Defined *Existing = cast<Defined>(Ref->Body);
-  if (isa<Undefined>(Sym) || isa<CanBeDefined>(Sym))
+  if (isa<Undefined>(Body) || isa<CanBeDefined>(Body))
     return std::error_code();
-  Defined *New = cast<Defined>(Sym);
+  Defined *New = cast<Defined>(Body);
 
   // Common symbols
   if (Existing->isCommon()) {
@@ -180,8 +180,8 @@ std::error_code SymbolTable::resolve(SymbolBody *Sym, Symbol **RefP) {
   return make_dynamic_error_code(Twine("duplicate symbol: ") + Ref->Body->getName());
 }
 
-std::error_code SymbolTable::addMemberFile(CanBeDefined *Sym) {
-  auto FileOrErr = Sym->getMember();
+std::error_code SymbolTable::addMemberFile(CanBeDefined *Body) {
+  auto FileOrErr = Body->getMember();
   if (auto EC = FileOrErr.getError())
     return EC;
   std::unique_ptr<InputFile> File = std::move(FileOrErr.get());
@@ -190,9 +190,9 @@ std::error_code SymbolTable::addMemberFile(CanBeDefined *Sym) {
   // read from the library.
   if (!File)
     return std::error_code();
-  File->setParentName(Sym->File->Name);
+  File->setParentName(Body->File->Name);
   if (Config->Verbose)
-    llvm::dbgs() << "Loaded " << File->getShortName() << " for " << Sym->getName() << "\n";
+    llvm::dbgs() << "Loaded " << File->getShortName() << " for " << Body->getName() << "\n";
   return addFile(std::move(File));
 }
 
@@ -216,15 +216,15 @@ void SymbolTable::dump() {
   for (auto &P : Symtab) {
     StringRef Name = P.first;
     Symbol *Ref = P.second;
-    if (auto *Sym = dyn_cast<Defined>(Ref->Body))
-      llvm::dbgs() << "0x" << Twine::utohexstr(ImageBase + Sym->getRVA())
-                   << " " << Sym->getName() << "\n";
+    if (auto *Body = dyn_cast<Defined>(Ref->Body))
+      llvm::dbgs() << "0x" << Twine::utohexstr(ImageBase + Body->getRVA())
+                   << " " << Body->getName() << "\n";
   }
 }
 
-void SymbolTable::addInitialSymbol(SymbolBody *Sym) {
-  OwnedSymbols.push_back(std::unique_ptr<SymbolBody>(Sym));
-  Symtab[Sym->getName()] = new (Alloc) Symbol(Sym);
+void SymbolTable::addInitialSymbol(SymbolBody *Body) {
+  OwnedSymbols.push_back(std::unique_ptr<SymbolBody>(Body));
+  Symtab[Body->getName()] = new (Alloc) Symbol(Body);
 }
 
 } // namespace coff

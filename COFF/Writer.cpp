@@ -123,8 +123,8 @@ std::map<StringRef, std::vector<DefinedImportData *>> Writer::binImports() {
   OutputSection *Text = createSection(".text");
   for (std::unique_ptr<ImportFile> &P : Symtab->ImportFiles) {
     for (std::unique_ptr<SymbolBody> &S : P->getSymbols()) {
-      if (auto *Sym = dyn_cast<DefinedImportData>(S.get())) {
-        Res[Sym->getDLLName()].push_back(Sym);
+      if (auto *Body = dyn_cast<DefinedImportData>(S.get())) {
+        Res[Body->getDLLName()].push_back(Body);
         continue;
       }
       Text->addChunk(cast<DefinedImportFunc>(S.get())->getChunk());
@@ -324,7 +324,6 @@ OutputSection *Writer::createSection(StringRef Name) {
   using namespace llvm::COFF;
   if (auto *S = findSection(Name))
     return S;
-
   const auto Read = IMAGE_SCN_MEM_READ;
   const auto Write = IMAGE_SCN_MEM_WRITE;
   const auto Execute = IMAGE_SCN_MEM_EXECUTE;
