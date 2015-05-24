@@ -149,9 +149,8 @@ std::error_code SymbolTable::addMemberFile(CanBeDefined *Body) {
 std::vector<Chunk *> SymbolTable::getChunks() {
   std::vector<Chunk *> Res;
   for (std::unique_ptr<ObjectFile> &File : ObjectFiles)
-    for (std::unique_ptr<Chunk> &C : File->Chunks)
-      if (C)
-        Res.push_back(C.get());
+    for (std::unique_ptr<Chunk> &C : File->getChunks())
+      Res.push_back(C.get());
   return Res;
 }
 

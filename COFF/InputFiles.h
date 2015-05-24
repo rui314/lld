@@ -27,16 +27,25 @@ using llvm::object::COFFObjectFile;
 namespace lld {
 namespace coff {
 
+// The root class of input files.
 class InputFile {
 public:
-  enum Kind { ArchiveKind, ObjectKind, ImplibKind };
+  enum Kind { ArchiveKind, ObjectKind, ImportKind };
   Kind kind() const { return FileKind; }
   virtual ~InputFile() {}
 
+  // Returns the filename.
   virtual StringRef getName() = 0;
+
+  // Returns symbols defined by this file.
   virtual std::vector<std::unique_ptr<SymbolBody>> &getSymbols() = 0;
 
+  // Returns a short, human-friendly filename. If this is a member of
+  // an archive file, a returned value includes parent's filename.
+  // Used for logging or debugging.
   std::string getShortName();
+
+  // Sets a parent filename if this file is created from an archive.
   void setParentName(StringRef N) { ParentName = N; }
 
 protected:
@@ -47,31 +56,37 @@ private:
   StringRef ParentName;
 };
 
+// .lib or .a file.
 class ArchiveFile : public InputFile {
 public:
   static bool classof(const InputFile *F) { return F->kind() == ArchiveKind; }
-
   static ErrorOr<std::unique_ptr<ArchiveFile>> create(StringRef Path);
 
   StringRef getName() override { return Name; }
+
+  // Returns a memory buffer for a given symbol. An empty memory
+  // buffer is returned if we have already returned the same memory
+  // buffer. (So that we don't instantiate same members more than
+  // once.)
+  ErrorOr<MemoryBufferRef> getMember(const Archive::Symbol *Sym);
+
+  // NB: All symbols returned by ArchiveFiles are of CanBeDefined type.
   std::vector<std::unique_ptr<SymbolBody>> &getSymbols() override {
     return SymbolBodies;
   }
-
-  std::string Name;
-  std::unique_ptr<Archive> File;
-
-  ErrorOr<MemoryBufferRef> getMember(const Archive::Symbol *Sym);
 
 private:
   ArchiveFile(StringRef Name, std::unique_ptr<Archive> File,
               std::unique_ptr<MemoryBuffer> Mem);
 
+  std::unique_ptr<Archive> File;
+  std::string Name;
   std::unique_ptr<MemoryBuffer> MB;
   std::vector<std::unique_ptr<SymbolBody>> SymbolBodies;
   std::set<const char *> Seen;
 };
 
+// .obj or .o file. This may be a member of an archive file.
 class ObjectFile : public InputFile {
 public:
   static bool classof(const InputFile *F) { return F->kind() == ObjectKind; }
@@ -81,16 +96,22 @@ public:
     create(StringRef Path, MemoryBufferRef MB);
 
   StringRef getName() override { return Name; }
+
+  // Returns a Symbol object for the SymbolIndex'th symbol in the
+  // underlying object file.
+  Symbol *getSymbol(uint32_t SymbolIndex);
+
+  std::vector<std::unique_ptr<Chunk>> &getChunks() { return Chunks; }
+
+  // Returns .drectve section contents if exist.
+  StringRef getDirectives() { return Directives; }
+
+  // Returns the underying COFF file.
+  COFFObjectFile *getCOFFObj() { return COFFObj.get(); }
+
   std::vector<std::unique_ptr<SymbolBody>> &getSymbols() override {
     return SymbolBodies;
   }
-  Symbol *getSymbol(uint32_t SymbolIndex);
-  StringRef getDirectives() { return Directives; }
-
-  std::string Name;
-  std::vector<std::unique_ptr<SymbolBody>> SymbolBodies;
-  std::vector<std::unique_ptr<Chunk>> Chunks;
-  std::unique_ptr<COFFObjectFile> COFFFile;
 
 private:
   ObjectFile(StringRef Name, std::unique_ptr<COFFObjectFile> File);
@@ -100,19 +121,26 @@ private:
   SymbolBody *createSymbolBody(StringRef Name, COFFSymbolRef Sym,
                                const void *Aux, bool IsFirst);
 
+  std::string Name;
+  std::unique_ptr<COFFObjectFile> COFFObj;
   std::unique_ptr<MemoryBuffer> MB;
   StringRef Directives;
+  std::vector<std::unique_ptr<Chunk>> Chunks;
+  std::vector<Chunk *> SparseChunks;
+  std::vector<std::unique_ptr<SymbolBody>> SymbolBodies;
   std::vector<SymbolBody *> SparseSymbolBodies;
 };
 
+// This type represents import library members that contain DLL names
+// and symbols exported from the DLLs. See Microsoft PE/COFF spec. 7
+// for details about the format.
 class ImportFile : public InputFile {
 public:
-  ImportFile(MemoryBufferRef M) : InputFile(ImplibKind), MBRef(M) {
-    readImplib();
+  ImportFile(MemoryBufferRef M) : InputFile(ImportKind), MBRef(M) {
+    readImport();
   }
 
-  static bool classof(const InputFile *F) { return F->kind() == ImplibKind; }
-
+  static bool classof(const InputFile *F) { return F->kind() == ImportKind; }
   StringRef getName() override { return MBRef.getBufferIdentifier(); }
 
   std::vector<std::unique_ptr<SymbolBody>> &getSymbols() override {
@@ -120,7 +148,7 @@ public:
   }
 
 private:
-  void readImplib();
+  void readImport();
 
   MemoryBufferRef MBRef;
   std::vector<std::unique_ptr<SymbolBody>> SymbolBodies;

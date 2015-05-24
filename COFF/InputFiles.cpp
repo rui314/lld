@@ -100,7 +100,7 @@ ErrorOr<std::unique_ptr<ObjectFile>> ObjectFile::create(StringRef Path) {
 }
 
 ObjectFile::ObjectFile(StringRef N, std::unique_ptr<COFFObjectFile> F)
-    : InputFile(ObjectKind), Name(N), COFFFile(std::move(F)) {
+    : InputFile(ObjectKind), Name(N), COFFObj(std::move(F)) {
   initializeChunks();
   initializeSymbols();
 }
@@ -110,22 +110,22 @@ Symbol *ObjectFile::getSymbol(uint32_t SymbolIndex) {
 }
 
 void ObjectFile::initializeChunks() {
-  uint32_t NumSections = COFFFile->getNumberOfSections();
-  Chunks.resize(NumSections + 1);
+  uint32_t NumSections = COFFObj->getNumberOfSections();
+  SparseChunks.resize(NumSections + 1);
   for (uint32_t I = 1; I < NumSections + 1; ++I) {
     const coff_section *Sec;
     StringRef Name;
-    if (auto EC = COFFFile->getSection(I, Sec)) {
+    if (auto EC = COFFObj->getSection(I, Sec)) {
       llvm::errs() << "getSection failed: " << Name << ": " << EC.message() << "\n";
       return;
     }
-    if (auto EC = COFFFile->getSectionName(Sec, Name)) {
+    if (auto EC = COFFObj->getSectionName(Sec, Name)) {
       llvm::errs() << "getSectionName failed: " << Name << ": " << EC.message() << "\n";
       return;
     }
     if (Name == ".drectve") {
       ArrayRef<uint8_t> Data;
-      COFFFile->getSectionContents(Sec, Data);
+      COFFObj->getSectionContents(Sec, Data);
       Directives = StringRef((char *)Data.data(), Data.size()).trim();
       continue;
     }
@@ -133,17 +133,19 @@ void ObjectFile::initializeChunks() {
       continue;
     if (Sec->Characteristics & llvm::COFF::IMAGE_SCN_LNK_REMOVE)
       continue;
-    Chunks[I].reset(new SectionChunk(this, Sec, I));
+    auto *C = new SectionChunk(this, Sec, I);
+    Chunks.push_back(std::unique_ptr<SectionChunk>(C));
+    SparseChunks[I] = C;
   }
 }
 
 void ObjectFile::initializeSymbols() {
-  uint32_t NumSymbols = COFFFile->getNumberOfSymbols();
+  uint32_t NumSymbols = COFFObj->getNumberOfSymbols();
   SparseSymbolBodies.resize(NumSymbols);
   int32_t LastSectionNumber = 0;
   for (uint32_t I = 0; I < NumSymbols; ++I) {
     // Get a COFFSymbolRef object.
-    auto SymOrErr = COFFFile->getSymbol(I);
+    auto SymOrErr = COFFObj->getSymbol(I);
     if (auto EC = SymOrErr.getError()) {
       llvm::errs() << "broken object file: " << Name << ": " << EC.message() << "\n";
       break;
@@ -152,7 +154,7 @@ void ObjectFile::initializeSymbols() {
 
     // Get a symbol name.
     StringRef SymbolName;
-    if (auto EC = COFFFile->getSymbolName(Sym, SymbolName)) {
+    if (auto EC = COFFObj->getSymbolName(Sym, SymbolName)) {
       llvm::errs() << "broken object file: " << Name << ": " << EC.message() << "\n";
       break;
     }
@@ -161,7 +163,7 @@ void ObjectFile::initializeSymbols() {
 
     const void *AuxP = nullptr;
     if (Sym.getNumberOfAuxSymbols())
-      AuxP = COFFFile->getSymbol(I + 1)->getRawPtr();
+      AuxP = COFFObj->getSymbol(I + 1)->getRawPtr();
     bool IsFirst = (LastSectionNumber != Sym.getSectionNumber());
 
     std::unique_ptr<SymbolBody> Body(createSymbolBody(SymbolName, Sym, AuxP, IsFirst));
@@ -191,16 +193,15 @@ SymbolBody *ObjectFile::createSymbolBody(StringRef Name, COFFSymbolRef Sym,
     return new Undefined(Name, &SparseSymbolBodies[Aux->TagIndex]);
   }
   if (IsFirst && AuxP) {
-    if (std::unique_ptr<Chunk> &C = Chunks[Sym.getSectionNumber()]) {
-      auto *SC = (SectionChunk *)C.get();
+    if (Chunk *C = SparseChunks[Sym.getSectionNumber()]) {
       auto *Aux = (coff_aux_section_definition *)AuxP;
-      auto *Parent = (SectionChunk *)(Chunks[Aux->getNumber(Sym.isBigObj())].get());
+      auto *Parent = (SectionChunk *)(SparseChunks[Aux->getNumber(Sym.isBigObj())]);
       if (Parent)
-        Parent->addAssociative(SC);
+        Parent->addAssociative(cast<SectionChunk>(C));
     }
   }
-  if (std::unique_ptr<Chunk> &C = Chunks[Sym.getSectionNumber()])
-    return new DefinedRegular(this, Name, Sym, C.get());
+  if (Chunk *C = SparseChunks[Sym.getSectionNumber()])
+    return new DefinedRegular(this, Name, Sym, C);
   return nullptr;
 }
 
@@ -218,7 +219,7 @@ ObjectFile::create(StringRef Path, MemoryBufferRef MBRef) {
   return std::move(File);
 }
 
-void ImportFile::readImplib() {
+void ImportFile::readImport() {
   const char *Buf = MBRef.getBufferStart();
   const char *End = MBRef.getBufferEnd();
 

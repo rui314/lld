@@ -28,9 +28,9 @@ namespace coff {
 
 SectionChunk::SectionChunk(ObjectFile *F, const coff_section *H, uint32_t SI)
     : File(F), Header(H), SectionIndex(SI) {
-  File->COFFFile->getSectionName(Header, SectionName);
+  File->getCOFFObj()->getSectionName(Header, SectionName);
   if (!isBSS())
-    File->COFFFile->getSectionContents(Header, Data);
+    File->getCOFFObj()->getSectionContents(Header, Data);
   unsigned Shift = ((Header->Characteristics & 0x00F00000) >> 20) - 1;
   Align = uint32_t(1) << Shift;
 }
@@ -50,7 +50,7 @@ void SectionChunk::markLive() {
     return;
   Live = true;
   for (const auto &I : getSectionRef().relocations()) {
-    const coff_relocation *Rel = File->COFFFile->getCOFFRelocation(I);
+    const coff_relocation *Rel = File->getCOFFObj()->getCOFFRelocation(I);
     if (auto *S = dyn_cast<Defined>(File->getSymbol(Rel->SymbolTableIndex)->Body))
       S->markLive();
   }
@@ -65,7 +65,7 @@ void SectionChunk::addAssociative(SectionChunk *Child) {
 
 void SectionChunk::applyRelocations(uint8_t *Buffer) {
   for (const auto &I : getSectionRef().relocations()) {
-    const coff_relocation *Rel = File->COFFFile->getCOFFRelocation(I);
+    const coff_relocation *Rel = File->getCOFFObj()->getCOFFRelocation(I);
     applyReloc(Buffer, Rel);
   }
 }
@@ -110,16 +110,16 @@ bool SectionChunk::isCOMDAT() const {
 }
 
 void SectionChunk::printDiscardMessage() {
-  uint32_t E = File->COFFFile->getNumberOfSymbols();
+  uint32_t E = File->getCOFFObj()->getNumberOfSymbols();
   for (uint32_t I = 0; I < E; ++I) {
-    auto SrefOrErr = File->COFFFile->getSymbol(I);
+    auto SrefOrErr = File->getCOFFObj()->getSymbol(I);
     COFFSymbolRef Sym = SrefOrErr.get();
     if (Sym.getSectionNumber() != SectionIndex)
       continue;
     if (!Sym.isFunctionDefinition())
       continue;
     StringRef SymbolName;
-    File->COFFFile->getSymbolName(Sym, SymbolName);
+    File->getCOFFObj()->getSymbolName(Sym, SymbolName);
     llvm::dbgs() << "Discarded " << SymbolName << " from "
                  << File->getShortName() << "\n";
     I += Sym.getNumberOfAuxSymbols();
@@ -129,7 +129,7 @@ void SectionChunk::printDiscardMessage() {
 SectionRef SectionChunk::getSectionRef() {
   DataRefImpl Ref;
   Ref.p = uintptr_t(Header);
-  return SectionRef(Ref, File->COFFFile.get());
+  return SectionRef(Ref, File->getCOFFObj());
 }
 
 uint32_t CommonChunk::getPermissions() const {

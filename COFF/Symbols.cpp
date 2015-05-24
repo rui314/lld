@@ -90,7 +90,7 @@ ErrorOr<std::unique_ptr<InputFile>> CanBeDefined::getMember() {
   if (auto EC = FileOrErr.getError())
     return EC;
   std::unique_ptr<ObjectFile> Obj = std::move(FileOrErr.get());
-  Obj->setParentName(File->Name);
+  Obj->setParentName(File->getName());
   return std::move(Obj);
 }
 
