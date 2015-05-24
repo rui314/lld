@@ -218,15 +218,6 @@ ObjectFile::create(StringRef Path, MemoryBufferRef MBRef) {
   return std::move(File);
 }
 
-StringRef ImportFile::getName() {
-  return MBRef.getBufferIdentifier();
-}
-
-ImportFile::ImportFile(MemoryBufferRef M)
-    : InputFile(ImplibKind), MBRef(M) {
-  readImplib();
-}
-
 void ImportFile::readImplib() {
   const char *Buf = MBRef.getBufferStart();
   const char *End = MBRef.getBufferEnd();

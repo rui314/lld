@@ -107,10 +107,13 @@ private:
 
 class ImportFile : public InputFile {
 public:
-  ImportFile(MemoryBufferRef M);
+  ImportFile(MemoryBufferRef M) : InputFile(ImplibKind), MBRef(M) {
+    readImplib();
+  }
+
   static bool classof(const InputFile *F) { return F->kind() == ImplibKind; }
 
-  StringRef getName() override;
+  StringRef getName() override { return MBRef.getBufferIdentifier(); }
 
   std::vector<std::unique_ptr<SymbolBody>> &getSymbols() override {
     return SymbolBodies;

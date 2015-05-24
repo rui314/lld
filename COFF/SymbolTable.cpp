@@ -23,6 +23,11 @@ SymbolTable::SymbolTable() {
   addInitialSymbol(new Undefined("mainCRTStartup"));
 }
 
+void SymbolTable::addInitialSymbol(SymbolBody *Body) {
+  OwnedSymbols.push_back(std::unique_ptr<SymbolBody>(Body));
+  Symtab[Body->getName()] = new (Alloc) Symbol(Body);
+}
+
 std::error_code SymbolTable::addFile(std::unique_ptr<InputFile> File) {
   InputFile *P = File.release();
   if (auto *F = dyn_cast<ObjectFile>(P))
@@ -49,6 +54,8 @@ std::error_code SymbolTable::addFile(ObjectFile *File) {
     }
   }
 
+  // If an object file contains .drectve section, read it and add
+  // files listed in the section.
   StringRef Dir = File->getDirectives();
   if (!Dir.empty()) {
     std::vector<std::unique_ptr<InputFile>> Libs;
@@ -91,12 +98,11 @@ bool SymbolTable::reportRemainingUndefines() {
   return false;
 }
 
-// This function resolves conflicts if a given symbol has the same
-// name as an existing symbol. Decisions are made based on symbol
-// types.
+// This function resolves conflicts if there's an existing symbol with
+// the same name. Decisions are made based on symbol types.
 std::error_code SymbolTable::resolve(SymbolBody *Body, Symbol **RefP) {
   StringRef Name = Body->getName();
-  auto *NewVal = new (Alloc) Symbol();
+  auto *NewVal = new (Alloc) Symbol(nullptr);
   auto Res = Symtab.insert(std::make_pair(Name, NewVal));
   Symbol *Ref = Res.second ? NewVal : Res.first->second;
 
@@ -122,9 +128,8 @@ std::error_code SymbolTable::resolve(SymbolBody *Body, Symbol **RefP) {
       return std::error_code();
     }
 
-    // CanBeDefined and Undefined: We read an archive member file
-    // pointed by the CanBeDefined symbol to resolve the Undefined
-    // symbol.
+    // CanBeDefined and Undefined: Read an archive member file pointed
+    // by the CanBeDefined symbol to resolve the Undefined symbol.
     if (auto *New = dyn_cast<CanBeDefined>(Body))
       return addMemberFile(New);
 
@@ -219,11 +224,6 @@ void SymbolTable::dump() {
       llvm::dbgs() << "0x" << Twine::utohexstr(ImageBase + Body->getRVA())
                    << " " << Body->getName() << "\n";
   }
-}
-
-void SymbolTable::addInitialSymbol(SymbolBody *Body) {
-  OwnedSymbols.push_back(std::unique_ptr<SymbolBody>(Body));
-  Symtab[Body->getName()] = new (Alloc) Symbol(Body);
 }
 
 } // namespace coff

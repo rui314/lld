@@ -41,7 +41,8 @@ const uint8_t *SectionChunk::getData() const {
 }
 
 bool SectionChunk::isRoot() {
-  return !isCOMDAT() && !IsChild && !(Header->Characteristics & llvm::COFF::IMAGE_SCN_CNT_CODE);
+  return !isCOMDAT() && !IsAssocChild &&
+    !(Header->Characteristics & llvm::COFF::IMAGE_SCN_CNT_CODE);
 }
 
 void SectionChunk::markLive() {
@@ -53,13 +54,13 @@ void SectionChunk::markLive() {
     if (auto *S = dyn_cast<Defined>(File->getSymbol(Rel->SymbolTableIndex)->Body))
       S->markLive();
   }
-  for (Chunk *C : Children)
+  for (Chunk *C : AssocChildren)
     C->markLive();
 }
 
 void SectionChunk::addAssociative(SectionChunk *Child) {
-  Child->IsChild = true;
-  Children.push_back(Child);
+  Child->IsAssocChild = true;
+  AssocChildren.push_back(Child);
 }
 
 void SectionChunk::applyRelocations(uint8_t *Buffer) {
@@ -139,6 +140,7 @@ uint32_t CommonChunk::getPermissions() const {
 
 void ImportFuncChunk::applyRelocations(uint8_t *Buffer) {
   uint32_t Operand = ImpSymbol->getRVA() - RVA - Data.size();
+  // The first two bytes are a JMP instruction. Fill it's operand.
   write32le(Buffer + FileOff + 2, Operand);
 }
 

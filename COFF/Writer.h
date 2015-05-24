@@ -21,6 +21,11 @@ namespace coff {
 
 const uint32_t PermMask = 0xF00000F0;
 
+// OutputSection represents a section in an output file. It's a
+// container of chunks. OutputSection and Chunk are 1:N relationship.
+// Chunks cannot belong to more than one OutputSections. The writer
+// creates multiple OutputSections and assign them unique,
+// non-overlapping file offsets and RVAs.
 class OutputSection {
 public:
   OutputSection(StringRef Nam, uint32_t SectionIndex);
@@ -47,6 +52,7 @@ private:
   std::vector<Chunk *> Chunks;
 };
 
+// The writer writes a SymbolTable result to a file.
 class Writer {
 public:
   explicit Writer(SymbolTable *T) : Symtab(T) {}
@@ -62,9 +68,11 @@ private:
   void writeHeader();
   void writeSections();
   void applyRelocations();
+
   OutputSection *findSection(StringRef Name);
-  uint32_t getTotalSectionSize(uint32_t Perm);
   OutputSection *createSection(StringRef Name);
+
+  uint32_t getTotalSectionSize(uint32_t Perm);
   std::map<StringRef, std::vector<DefinedImportData *>> binImports();
 
   SymbolTable *Symtab;

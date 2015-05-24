@@ -30,40 +30,71 @@ class DefinedImportData;
 class ObjectFile;
 class OutputSection;
 
-LLVM_ATTRIBUTE_NORETURN inline void unimplemented() {
-  llvm_unreachable("internal error");
-}
-
+// A Chunk represents a chunk of data that will occupy space in the
+// output (if the resolver chose that). It may or may not be backed by
+// a section of an input file. It could be linker-created data, or
+// doesn't even have actual data (if common or bss).
 class Chunk {
 public:
   ~Chunk() {}
 
+  // Returns the pointer to data. It is illegal to call this function if
+  // this is a common or BSS chunk.
   virtual const uint8_t *getData() const = 0;
+
+  // Returns the size of this chunk (even if this is a common or BSS.)
   virtual size_t getSize() const = 0;
-  virtual void applyRelocations(uint8_t *Buffer) {}
-  virtual bool isBSS() const { return false; }
-  virtual bool isCOMDAT() const { return false; }
-  virtual bool isCommon() const { return false; }
-  virtual uint32_t getPermissions() const { return 0; }
-  virtual StringRef getSectionName() const { unimplemented(); }
-  virtual void printDiscardMessage() { unimplemented(); }
 
-  virtual bool isRoot() { return false; }
-  virtual bool isLive() { return true; }
-  virtual void markLive() {}
-
+  // The writer sets and uses the addresses.
   uint64_t getRVA() { return RVA; }
   uint64_t getFileOff() { return FileOff; }
   uint32_t getAlign() { return Align; }
   void setRVA(uint64_t V) { RVA = V; }
   void setFileOff(uint64_t V) { FileOff = V; }
 
+  // Applies relocations, assuming Buffer points to beginning of an
+  // mmap'ed output file. Because this function uses file offsets and
+  // RVA values of other chunks, you need to set them properly before
+  // calling this function.
+  virtual void applyRelocations(uint8_t *Buffer) {}
+
+  virtual bool isBSS() const { return false; }
+  virtual bool isCOMDAT() const { return false; }
+  virtual bool isCommon() const { return false; }
+
+  // Returns readable/writable/executable bits.
+  virtual uint32_t getPermissions() const { return 0; }
+
+  // Returns the section name if this is a section chunk.
+  // It is illegal to call this function on non-section chunks.
+  virtual StringRef getSectionName() const {
+    llvm_unreachable("internal error");
+  }
+
+  // Called if the garbage collector decides to not include this chunk
+  // in a final output. It's supposed to print out a log message. It
+  // is illegal to call this function on non-section chunks because
+  // only section chunks are subject of garbage collection.
+  virtual void printDiscardMessage() {
+    llvm_unreachable("internal error");
+  }
+
+  // Used by the garbage collector.
+  virtual bool isRoot() { return false; }
+  virtual bool isLive() { return true; }
+  virtual void markLive() {}
+
+  // An output section has pointers to chunks in the section, and each
+  // chunk has a back pointer to an output section.
   void setOutputSection(OutputSection *O) { Out = O; }
   OutputSection *getOutputSection() { return Out; }
 
 protected:
-  uint32_t Align = 1;
+  // The RVA of this chunk in the output. The writer sets a value.
   uint64_t RVA = 0;
+
+  // The offset from beginning of the output file. The writer sets a
+  // value.
   uint64_t FileOff = 0;
 
   // The alignment of this chunk. The writer uses the value.
@@ -73,6 +104,7 @@ protected:
   OutputSection *Out = nullptr;
 };
 
+// A chunk representing a section of an input file.
 class SectionChunk : public Chunk {
 public:
   SectionChunk(ObjectFile *File, const coff_section *Header,
@@ -89,22 +121,28 @@ public:
   bool isRoot() override;
   void markLive() override;
   bool isLive() override { return isRoot() || Live; }
+
+  // Adds COMDAT associative sections to this COMDAT section. A chunk
+  // and its children are treated as a group by the garbage collector.
   void addAssociative(SectionChunk *Child);
 
 private:
   SectionRef getSectionRef();
   void applyReloc(uint8_t *Buffer, const coff_relocation *Rel);
 
+  // A file this chunk was created from.
   ObjectFile *File;
+
   const coff_section *Header;
   uint32_t SectionIndex;
   StringRef SectionName;
   ArrayRef<uint8_t> Data;
   bool Live = false;
-  std::vector<Chunk *> Children;
-  bool IsChild = false;
+  std::vector<Chunk *> AssocChildren;
+  bool IsAssocChild = false;
 };
 
+// A chunk for common symbols. Common chunks don't have actual data.
 class CommonChunk : public Chunk {
 public:
   CommonChunk(const COFFSymbolRef S) : Sym(S) {}
@@ -114,10 +152,15 @@ public:
   uint32_t getPermissions() const override;
   StringRef getSectionName() const override { return ".bss"; }
 
+  const uint8_t *getData() const override {
+    llvm_unreachable("internal error");
+  }
+
 private:
   const COFFSymbolRef Sym;
 };
 
+// A chunk for linker-created strings.
 class StringChunk : public Chunk {
 public:
   StringChunk(StringRef S) : Data(S.size() + 1) {
@@ -136,6 +179,8 @@ static const uint8_t ImportFuncData[] = {
   0xff, 0x25, 0x00, 0x00, 0x00, 0x00, // JMP *0x0
 };
 
+// A chunk for DLL import jump table entry. In a final output, it's
+// contents will be a JMP instruction to some __imp_ symbol.
 class ImportFuncChunk : public Chunk {
 public:
   ImportFuncChunk(Defined *S)
@@ -151,6 +196,7 @@ private:
   std::vector<uint8_t> Data;
 };
 
+// A chunk for the import descriptor table.
 class HintNameChunk : public Chunk {
 public:
   HintNameChunk(StringRef Name);
@@ -162,6 +208,7 @@ private:
   std::vector<uint8_t> Data;
 };
 
+// A chunk for the import descriptor table.
 class LookupChunk : public Chunk {
 public:
   LookupChunk(HintNameChunk *H) : HintName(H) {}
@@ -174,6 +221,7 @@ private:
   uint64_t Ent = 0;
 };
 
+// A chunk for the import descriptor table.
 class DirectoryChunk : public Chunk {
 public:
   DirectoryChunk(StringChunk *N) : DLLName(N) {}
@@ -189,6 +237,7 @@ private:
   llvm::COFF::ImportDirectoryTableEntry Ent = {};
 };
 
+// A chunk for the import descriptor table.
 class NullChunk : public Chunk {
 public:
   NullChunk(size_t Size) : Data(Size) {}
@@ -200,9 +249,11 @@ private:
   std::vector<uint8_t> Data;
 };
 
+// ImportTable creates a set of import table chunks for a given
+// DLL-imported symbols.
 class ImportTable {
 public:
-  ImportTable(StringRef N, std::vector<DefinedImportData *> &Symbols);
+  ImportTable(StringRef DLLName, std::vector<DefinedImportData *> &Symbols);
   StringChunk *DLLName;
   DirectoryChunk *DirTab;
   std::vector<LookupChunk *> LookupTables;
