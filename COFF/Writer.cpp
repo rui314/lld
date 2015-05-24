@@ -30,11 +30,11 @@ static const int FileAlignment = 512;
 static const int SectionAlignment = 4096;
 static const int DOSStubSize = 64;
 static const int NumberfOfDataDirectory = 16;
-static const int HeaderSize = DOSStubSize
-  + sizeof(llvm::COFF::PEMagic)
-  + sizeof(llvm::object::coff_file_header)
-  + sizeof(llvm::object::pe32plus_header)
-  + sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
+static const int HeaderSize =
+    DOSStubSize + sizeof(llvm::COFF::PEMagic) +
+    sizeof(llvm::object::coff_file_header) +
+    sizeof(llvm::object::pe32plus_header) +
+    sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
 
 namespace lld {
 namespace coff {
@@ -75,9 +75,7 @@ void OutputSection::addPermissions(uint32_t C) {
   Header.Characteristics = Header.Characteristics | (C & PermMask);
 }
 
-static StringRef dropDollar(StringRef S) {
-  return S.substr(0, S.find('$'));
-}
+static StringRef dropDollar(StringRef S) { return S.substr(0, S.find('$')); }
 
 void Writer::markLive() {
   Entry = cast<Defined>(Symtab->find(Config->EntryName));
@@ -110,7 +108,8 @@ void Writer::createSections() {
     StringRef SectionName = P.first;
     std::vector<Chunk *> &Chunks = P.second;
     std::stable_sort(Chunks.begin(), Chunks.end(), Comp);
-    auto Sec = llvm::make_unique<OutputSection>(SectionName, OutputSections.size());
+    auto Sec =
+        llvm::make_unique<OutputSection>(SectionName, OutputSections.size());
     for (Chunk *C : Chunks) {
       C->setOutputSection(Sec.get());
       Sec->addChunk(C);
@@ -204,17 +203,16 @@ void Writer::removeEmptySections() {
   auto IsEmpty = [](const std::unique_ptr<OutputSection> &S) {
     return S->getVirtualSize() == 0;
   };
-  OutputSections.erase(std::remove_if(OutputSections.begin(),
-                                      OutputSections.end(),
-                                      IsEmpty),
-                       OutputSections.end());
+  OutputSections.erase(
+      std::remove_if(OutputSections.begin(), OutputSections.end(), IsEmpty),
+      OutputSections.end());
 }
 
 // Visits all sections to assign incremental, non-overlapping RVAs and
 // file offsets.
 void Writer::assignAddresses() {
   uint64_t HeaderEnd = RoundUpToAlignment(
-    HeaderSize + sizeof(coff_section) * OutputSections.size(), PageSize);
+      HeaderSize + sizeof(coff_section) * OutputSections.size(), PageSize);
   uint64_t RVA = 0x1000; // The first page is kept unmapped.
   uint64_t FileOff = HeaderEnd;
   for (std::unique_ptr<OutputSection> &Sec : OutputSections) {
@@ -246,11 +244,12 @@ void Writer::writeHeader() {
   P += sizeof(coff_file_header);
   COFF->Machine = llvm::COFF::IMAGE_FILE_MACHINE_AMD64;
   COFF->NumberOfSections = OutputSections.size();
-  COFF->Characteristics = (llvm::COFF::IMAGE_FILE_EXECUTABLE_IMAGE
-                           | llvm::COFF::IMAGE_FILE_RELOCS_STRIPPED
-                           | llvm::COFF::IMAGE_FILE_LARGE_ADDRESS_AWARE);
-  COFF->SizeOfOptionalHeader = sizeof(pe32plus_header)
-    + sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
+  COFF->Characteristics = (llvm::COFF::IMAGE_FILE_EXECUTABLE_IMAGE |
+                           llvm::COFF::IMAGE_FILE_RELOCS_STRIPPED |
+                           llvm::COFF::IMAGE_FILE_LARGE_ADDRESS_AWARE);
+  COFF->SizeOfOptionalHeader =
+      sizeof(pe32plus_header) +
+      sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
 
   // Write PE header
   PE = reinterpret_cast<pe32plus_header *>(P);
@@ -292,13 +291,14 @@ void Writer::writeHeader() {
   for (std::unique_ptr<OutputSection> &Out : OutputSections)
     SectionTable[Idx++] = *Out->getHeader();
   PE->SizeOfHeaders = RoundUpToAlignment(
-    HeaderSize + sizeof(coff_section) * OutputSections.size(), FileAlignment);
+      HeaderSize + sizeof(coff_section) * OutputSections.size(), FileAlignment);
 }
 
 std::error_code Writer::openFile(StringRef Path) {
-  if (auto EC = FileOutputBuffer::create(
-        Path, FileSize, Buffer, FileOutputBuffer::F_executable))
-    return make_dynamic_error_code(Twine("Failed to open ") + Path + ": " + EC.message());
+  if (auto EC = FileOutputBuffer::create(Path, FileSize, Buffer,
+                                         FileOutputBuffer::F_executable))
+    return make_dynamic_error_code(Twine("Failed to open ") + Path + ": " +
+                                   EC.message());
   return std::error_code();
 }
 
@@ -341,13 +341,14 @@ OutputSection *Writer::createSection(StringRef Name) {
   const auto Read = IMAGE_SCN_MEM_READ;
   const auto Write = IMAGE_SCN_MEM_WRITE;
   const auto Execute = IMAGE_SCN_MEM_EXECUTE;
-  uint32_t Perm = StringSwitch<uint32_t>(Name)
-    .Case(".bss", IMAGE_SCN_CNT_UNINITIALIZED_DATA | Read | Write)
-    .Case(".data", IMAGE_SCN_CNT_INITIALIZED_DATA | Read | Write)
-    .Case(".idata", IMAGE_SCN_CNT_INITIALIZED_DATA | Read)
-    .Case(".rdata", IMAGE_SCN_CNT_INITIALIZED_DATA | Read)
-    .Case(".text", IMAGE_SCN_CNT_CODE | Read | Execute)
-    .Default(0);
+  uint32_t Perm =
+      StringSwitch<uint32_t>(Name)
+          .Case(".bss", IMAGE_SCN_CNT_UNINITIALIZED_DATA | Read | Write)
+          .Case(".data", IMAGE_SCN_CNT_INITIALIZED_DATA | Read | Write)
+          .Case(".idata", IMAGE_SCN_CNT_INITIALIZED_DATA | Read)
+          .Case(".rdata", IMAGE_SCN_CNT_INITIALIZED_DATA | Read)
+          .Case(".text", IMAGE_SCN_CNT_CODE | Read | Execute)
+          .Default(0);
   if (!Perm)
     llvm_unreachable("unknown section name");
   auto Sec = new OutputSection(Name, OutputSections.size());

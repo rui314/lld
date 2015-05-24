@@ -112,7 +112,7 @@ public:
 class DefinedRegular : public Defined {
 public:
   DefinedRegular(ObjectFile *F, StringRef Name, COFFSymbolRef S, Chunk *C)
-    : Defined(DefinedRegularKind, Name), File(F), Sym(S), Section(C) {}
+      : Defined(DefinedRegularKind, Name), File(F), Sym(S), Section(C) {}
 
   static bool classof(const SymbolBody *S) {
     return S->kind() == DefinedRegularKind;
@@ -145,7 +145,7 @@ private:
 class DefinedAbsolute : public Defined {
 public:
   DefinedAbsolute(StringRef Name, uint64_t VA)
-    : Defined(DefinedAbsoluteKind, Name), RVA(VA - Config->ImageBase) {}
+      : Defined(DefinedAbsoluteKind, Name), RVA(VA - Config->ImageBase) {}
 
   static bool classof(const SymbolBody *S) {
     return S->kind() == DefinedAbsoluteKind;
@@ -165,8 +165,8 @@ private:
 class DefinedImportData : public Defined {
 public:
   DefinedImportData(StringRef D, StringRef ImportName, StringRef ExportName)
-    : Defined(DefinedImportDataKind, ImportName),
-      DLLName(D), ExpName(ExportName) {}
+      : Defined(DefinedImportDataKind, ImportName), DLLName(D),
+        ExpName(ExportName) {}
 
   static bool classof(const SymbolBody *S) {
     return S->kind() == DefinedImportDataKind;
@@ -192,7 +192,7 @@ private:
 class DefinedImportFunc : public Defined {
 public:
   DefinedImportFunc(StringRef Name, DefinedImportData *S)
-    : Defined(DefinedImportFuncKind, Name), Data(S) {}
+      : Defined(DefinedImportFuncKind, Name), Data(S) {}
 
   static bool classof(const SymbolBody *S) {
     return S->kind() == DefinedImportFuncKind;
@@ -215,7 +215,7 @@ private:
 class CanBeDefined : public SymbolBody {
 public:
   CanBeDefined(ArchiveFile *F, const Archive::Symbol S)
-    : SymbolBody(CanBeDefinedKind, S.getName()), File(F), Sym(S) {}
+      : SymbolBody(CanBeDefinedKind, S.getName()), File(F), Sym(S) {}
 
   static bool classof(const SymbolBody *S) {
     return S->kind() == CanBeDefinedKind;
@@ -236,7 +236,7 @@ private:
 class Undefined : public SymbolBody {
 public:
   Undefined(StringRef Name, SymbolBody **S = nullptr)
-    : SymbolBody(UndefinedKind, Name), Alias(S) {}
+      : SymbolBody(UndefinedKind, Name), Alias(S) {}
 
   static bool classof(const SymbolBody *S) {
     return S->kind() == UndefinedKind;

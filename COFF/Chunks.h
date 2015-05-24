@@ -74,9 +74,7 @@ public:
   // in a final output. It's supposed to print out a log message. It
   // is illegal to call this function on non-section chunks because
   // only section chunks are subject of garbage collection.
-  virtual void printDiscardMessage() {
-    llvm_unreachable("internal error");
-  }
+  virtual void printDiscardMessage() { llvm_unreachable("internal error"); }
 
   // Used by the garbage collector.
   virtual bool isRoot() { return false; }
@@ -174,7 +172,7 @@ private:
 };
 
 static const uint8_t ImportFuncData[] = {
-  0xff, 0x25, 0x00, 0x00, 0x00, 0x00, // JMP *0x0
+    0xff, 0x25, 0x00, 0x00, 0x00, 0x00, // JMP *0x0
 };
 
 // A chunk for DLL import jump table entry. In a final output, it's
@@ -182,8 +180,8 @@ static const uint8_t ImportFuncData[] = {
 class ImportFuncChunk : public Chunk {
 public:
   ImportFuncChunk(Defined *S)
-    : ImpSymbol(S),
-      Data(ImportFuncData, ImportFuncData + sizeof(ImportFuncData)) {}
+      : ImpSymbol(S),
+        Data(ImportFuncData, ImportFuncData + sizeof(ImportFuncData)) {}
 
   const uint8_t *getData() const override { return &Data[0]; }
   size_t getSize() const override { return Data.size(); }

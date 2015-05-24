@@ -144,8 +144,8 @@ std::error_code SymbolTable::addMemberFile(CanBeDefined *Body) {
   if (!File)
     return std::error_code();
   if (Config->Verbose)
-    llvm::dbgs() << "Loaded " << File->getShortName()
-                 << " for " << Body->getName() << "\n";
+    llvm::dbgs() << "Loaded " << File->getShortName() << " for "
+                 << Body->getName() << "\n";
   return addFile(std::move(File));
 }
 

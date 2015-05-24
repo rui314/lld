@@ -21,9 +21,9 @@ namespace coff {
 
 class InputFile;
 
-std::error_code
-parseDirectives(StringRef S, std::vector<std::unique_ptr<InputFile>> *Res,
-                StringAllocator *Alloc);
+std::error_code parseDirectives(StringRef S,
+                                std::vector<std::unique_ptr<InputFile>> *Res,
+                                StringAllocator *Alloc);
 
 } // namespace coff
 } // namespace lld

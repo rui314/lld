@@ -33,9 +33,9 @@ using namespace llvm;
 // Create enum with OPT_xxx values for each option in Options.td
 enum {
   OPT_INVALID = 0,
-#define OPTION(PREFIX, NAME, ID, KIND, GROUP, ALIAS, ALIASARGS, FLAGS, PARAM, \
-               HELP, META) \
-          OPT_##ID,
+#define OPTION(PREFIX, NAME, ID, KIND, GROUP, ALIAS, ALIASARGS, FLAGS, PARAM,  \
+               HELP, META)                                                     \
+  OPT_##ID,
 #include "Options.inc"
 #undef OPTION
 };
@@ -47,10 +47,13 @@ enum {
 
 // Create table mapping all options defined in Options.td
 static const llvm::opt::OptTable::Info infoTable[] = {
-#define OPTION(PREFIX, NAME, ID, KIND, GROUP, ALIAS, ALIASARGS, FLAGS, PARAM, \
-               HELPTEXT, METAVAR) \
-  { PREFIX, NAME, HELPTEXT, METAVAR, OPT_##ID, llvm::opt::Option::KIND##Class, \
-    PARAM, FLAGS, OPT_##GROUP, OPT_##ALIAS, ALIASARGS },
+#define OPTION(PREFIX, NAME, ID, KIND, GROUP, ALIAS, ALIASARGS, FLAGS, PARAM,  \
+               HELPTEXT, METAVAR)                                              \
+  {                                                                            \
+    PREFIX, NAME, HELPTEXT, METAVAR, OPT_##ID, llvm::opt::Option::KIND##Class, \
+        PARAM, FLAGS, OPT_##GROUP, OPT_##ALIAS, ALIASARGS                      \
+  }                                                                            \
+  ,
 #include "Options.inc"
 #undef OPTION
 };
@@ -59,8 +62,7 @@ namespace {
 
 class COFFOptTable : public llvm::opt::OptTable {
 public:
-  COFFOptTable()
-    : OptTable(infoTable, llvm::array_lengthof(infoTable), true) {}
+  COFFOptTable() : OptTable(infoTable, llvm::array_lengthof(infoTable), true) {}
 };
 
 class BumpPtrStringSaver : public llvm::cl::StringSaver {
@@ -74,7 +76,6 @@ public:
 private:
   lld::coff::StringAllocator *Alloc;
 };
-
 }
 
 static std::string getOutputPath(llvm::opt::InputArgList *Args) {
@@ -117,8 +118,8 @@ parseArgs(int Argc, const char *Argv[]) {
     std::string S;
     llvm::raw_string_ostream OS(S);
     OS << llvm::format("missing arg value for \"%s\", expected %d argument%s.",
-                       Args->getArgString(MissingIndex),
-                       MissingCount, (MissingCount == 1 ? "" : "s"));
+                       Args->getArgString(MissingIndex), MissingCount,
+                       (MissingCount == 1 ? "" : "s"));
     OS.flush();
     return lld::make_dynamic_error_code(StringRef(S));
   }
@@ -242,6 +243,5 @@ bool link(int Argc, const char *Argv[]) {
   }
   return true;
 }
-
 }
 }

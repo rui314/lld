@@ -39,7 +39,8 @@ std::string InputFile::getShortName() {
   StringRef Name = getName();
   if (ParentName == "")
     return Name.lower();
-  return StringRef((basename(ParentName) + "(" + basename(Name) + ")").str()).lower();
+  return StringRef((basename(ParentName) + "(" + basename(Name) + ")").str())
+      .lower();
 }
 
 ErrorOr<std::unique_ptr<ArchiveFile>> ArchiveFile::create(StringRef Path) {
@@ -54,7 +55,7 @@ ErrorOr<std::unique_ptr<ArchiveFile>> ArchiveFile::create(StringRef Path) {
   std::unique_ptr<Archive> File = std::move(ArchiveOrErr.get());
 
   return std::unique_ptr<ArchiveFile>(
-    new ArchiveFile(Path, std::move(File), std::move(MB)));
+      new ArchiveFile(Path, std::move(File), std::move(MB)));
 }
 
 ArchiveFile::ArchiveFile(StringRef N, std::unique_ptr<Archive> F,
@@ -68,8 +69,7 @@ ArchiveFile::ArchiveFile(StringRef N, std::unique_ptr<Archive> F,
   }
 }
 
-ErrorOr<MemoryBufferRef>
-ArchiveFile::getMember(const Archive::Symbol *Sym) {
+ErrorOr<MemoryBufferRef> ArchiveFile::getMember(const Archive::Symbol *Sym) {
   auto ItOrErr = Sym->getMember();
   if (auto EC = ItOrErr.getError())
     return EC;
@@ -119,11 +119,13 @@ void ObjectFile::initializeChunks() {
     const coff_section *Sec;
     StringRef Name;
     if (auto EC = COFFObj->getSection(I, Sec)) {
-      llvm::errs() << "getSection failed: " << Name << ": " << EC.message() << "\n";
+      llvm::errs() << "getSection failed: " << Name << ": " << EC.message()
+                   << "\n";
       return;
     }
     if (auto EC = COFFObj->getSectionName(Sec, Name)) {
-      llvm::errs() << "getSectionName failed: " << Name << ": " << EC.message() << "\n";
+      llvm::errs() << "getSectionName failed: " << Name << ": " << EC.message()
+                   << "\n";
       return;
     }
     if (Name == ".drectve") {
@@ -150,7 +152,8 @@ void ObjectFile::initializeSymbols() {
     // Get a COFFSymbolRef object.
     auto SymOrErr = COFFObj->getSymbol(I);
     if (auto EC = SymOrErr.getError()) {
-      llvm::errs() << "broken object file: " << Name << ": " << EC.message() << "\n";
+      llvm::errs() << "broken object file: " << Name << ": " << EC.message()
+                   << "\n";
       break;
     }
     COFFSymbolRef Sym = SymOrErr.get();
@@ -158,7 +161,8 @@ void ObjectFile::initializeSymbols() {
     // Get a symbol name.
     StringRef SymbolName;
     if (auto EC = COFFObj->getSymbolName(Sym, SymbolName)) {
-      llvm::errs() << "broken object file: " << Name << ": " << EC.message() << "\n";
+      llvm::errs() << "broken object file: " << Name << ": " << EC.message()
+                   << "\n";
       break;
     }
     // Skip special symbols.
@@ -170,7 +174,8 @@ void ObjectFile::initializeSymbols() {
       AuxP = COFFObj->getSymbol(I + 1)->getRawPtr();
     bool IsFirst = (LastSectionNumber != Sym.getSectionNumber());
 
-    std::unique_ptr<SymbolBody> Body(createSymbolBody(SymbolName, Sym, AuxP, IsFirst));
+    std::unique_ptr<SymbolBody> Body(
+        createSymbolBody(SymbolName, Sym, AuxP, IsFirst));
     if (Body) {
       SparseSymbolBodies[I] = Body.get();
       SymbolBodies.push_back(std::move(Body));
@@ -199,7 +204,8 @@ SymbolBody *ObjectFile::createSymbolBody(StringRef Name, COFFSymbolRef Sym,
   if (IsFirst && AuxP) {
     if (Chunk *C = SparseChunks[Sym.getSectionNumber()]) {
       auto *Aux = (coff_aux_section_definition *)AuxP;
-      auto *Parent = (SectionChunk *)(SparseChunks[Aux->getNumber(Sym.isBigObj())]);
+      auto *Parent =
+          (SectionChunk *)(SparseChunks[Aux->getNumber(Sym.isBigObj())]);
       if (Parent)
         Parent->addAssociative((SectionChunk *)C);
     }
@@ -209,8 +215,8 @@ SymbolBody *ObjectFile::createSymbolBody(StringRef Name, COFFSymbolRef Sym,
   return nullptr;
 }
 
-ErrorOr<std::unique_ptr<ObjectFile>>
-ObjectFile::create(StringRef Path, MemoryBufferRef MBRef) {
+ErrorOr<std::unique_ptr<ObjectFile>> ObjectFile::create(StringRef Path,
+                                                        MemoryBufferRef MBRef) {
   auto BinOrErr = createBinary(MBRef);
   if (auto EC = BinOrErr.getError())
     return EC;
@@ -218,7 +224,7 @@ ObjectFile::create(StringRef Path, MemoryBufferRef MBRef) {
 
   if (!isa<COFFObjectFile>(Bin.get()))
     return lld::make_dynamic_error_code(Twine(Path) + " is not a COFF file.");
-  std::unique_ptr<COFFObjectFile> Obj(static_cast<COFFObjectFile *>(Bin.release()));
+  std::unique_ptr<COFFObjectFile> Obj((COFFObjectFile *)Bin.release());
   auto File = std::unique_ptr<ObjectFile>(new ObjectFile(Path, std::move(Obj)));
   return std::move(File);
 }
@@ -247,6 +253,5 @@ void ImportFile::readImports() {
   if (Type == llvm::COFF::IMPORT_CODE)
     SymbolBodies.push_back(llvm::make_unique<DefinedImportFunc>(Name, ImpSym));
 }
-
 }
 }

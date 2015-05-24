@@ -42,7 +42,7 @@ const uint8_t *SectionChunk::getData() const {
 
 bool SectionChunk::isRoot() {
   return !isCOMDAT() && !IsAssocChild &&
-    !(Header->Characteristics & llvm::COFF::IMAGE_SCN_CNT_CODE);
+         !(Header->Characteristics & llvm::COFF::IMAGE_SCN_CNT_CODE);
 }
 
 void SectionChunk::markLive() {
@@ -51,7 +51,8 @@ void SectionChunk::markLive() {
   Live = true;
   for (const auto &I : getSectionRef().relocations()) {
     const coff_relocation *Rel = File->getCOFFObj()->getCOFFRelocation(I);
-    if (auto *S = dyn_cast<Defined>(File->getSymbol(Rel->SymbolTableIndex)->Body))
+    if (auto *S =
+            dyn_cast<Defined>(File->getSymbol(Rel->SymbolTableIndex)->Body))
       S->markLive();
   }
   for (Chunk *C : AssocChildren)
@@ -135,8 +136,8 @@ SectionRef SectionChunk::getSectionRef() {
 
 uint32_t CommonChunk::getPermissions() const {
   using namespace llvm::COFF;
-  return IMAGE_SCN_CNT_UNINITIALIZED_DATA | IMAGE_SCN_MEM_READ
-    | IMAGE_SCN_MEM_WRITE;
+  return IMAGE_SCN_CNT_UNINITIALIZED_DATA | IMAGE_SCN_MEM_READ |
+         IMAGE_SCN_MEM_WRITE;
 }
 
 void ImportFuncChunk::applyRelocations(uint8_t *Buffer) {
@@ -146,7 +147,7 @@ void ImportFuncChunk::applyRelocations(uint8_t *Buffer) {
 }
 
 HintNameChunk::HintNameChunk(StringRef Name)
-  : Data(RoundUpToAlignment(Name.size() + 4, 2)) {
+    : Data(RoundUpToAlignment(Name.size() + 4, 2)) {
   memcpy(&Data[2], Name.data(), Name.size());
 }
 
@@ -179,6 +180,5 @@ ImportTable::ImportTable(StringRef N,
   DirTab->LookupTab = LookupTables[0];
   DirTab->AddressTab = AddressTables[0];
 }
-
 }
 }

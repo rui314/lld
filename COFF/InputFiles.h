@@ -92,8 +92,8 @@ public:
   static bool classof(const InputFile *F) { return F->kind() == ObjectKind; }
 
   static ErrorOr<std::unique_ptr<ObjectFile>> create(StringRef Path);
-  static ErrorOr<std::unique_ptr<ObjectFile>>
-    create(StringRef Path, MemoryBufferRef MB);
+  static ErrorOr<std::unique_ptr<ObjectFile>> create(StringRef Path,
+                                                     MemoryBufferRef MB);
 
   StringRef getName() override { return Name; }
 
