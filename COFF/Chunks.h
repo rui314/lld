@@ -17,6 +17,7 @@
 #include <vector>
 
 using llvm::object::COFFSymbolRef;
+using llvm::object::SectionRef;
 using llvm::object::coff_relocation;
 using llvm::object::coff_section;
 using llvm::sys::fs::file_magic;
@@ -65,7 +66,10 @@ protected:
   uint64_t RVA = 0;
   uint64_t FileOff = 0;
 
-private:
+  // The alignment of this chunk. The writer uses the value.
+  uint32_t Align = 1;
+
+  // The output section for this chunk.
   OutputSection *Out = nullptr;
 };
 
@@ -74,7 +78,7 @@ public:
   SectionChunk(ObjectFile *File, const coff_section *Header,
                uint32_t SectionIndex);
   const uint8_t *getData() const override;
-  size_t getSize() const override;
+  size_t getSize() const override { return Header->SizeOfRawData; }
   void applyRelocations(uint8_t *Buffer) override;
   bool isBSS() const override;
   bool isCOMDAT() const override;
@@ -88,6 +92,7 @@ public:
   void addAssociative(SectionChunk *Child);
 
 private:
+  SectionRef getSectionRef();
   void applyReloc(uint8_t *Buffer, const coff_relocation *Rel);
 
   ObjectFile *File;
@@ -103,8 +108,7 @@ private:
 class CommonChunk : public Chunk {
 public:
   CommonChunk(const COFFSymbolRef S) : Sym(S) {}
-  const uint8_t *getData() const override { unimplemented(); }
-  size_t getSize() const override;
+  size_t getSize() const override { return Sym.getValue(); }
   bool isBSS() const override { return true; }
   bool isCommon() const override { return true; }
   uint32_t getPermissions() const override;
@@ -150,12 +154,12 @@ private:
 class HintNameChunk : public Chunk {
 public:
   HintNameChunk(StringRef Name);
-  const uint8_t *getData() const override { return &(*Data)[0]; }
-  size_t getSize() const override { return Data->size(); }
+  const uint8_t *getData() const override { return Data.data(); }
+  size_t getSize() const override { return Data.size(); }
   void applyRelocations(uint8_t *Buffer) override {}
 
 private:
-  std::vector<uint8_t> *Data;
+  std::vector<uint8_t> Data;
 };
 
 class LookupChunk : public Chunk {

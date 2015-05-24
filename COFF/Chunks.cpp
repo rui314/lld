@@ -48,11 +48,8 @@ void SectionChunk::markLive() {
   if (Live)
     return;
   Live = true;
-  DataRefImpl Ref;
-  Ref.p = uintptr_t(Header);
-  COFFObjectFile *FP = File->COFFFile.get();
-  for (const auto &I : SectionRef(Ref, FP).relocations()) {
-    const coff_relocation *Rel = FP->getCOFFRelocation(I);
+  for (const auto &I : getSectionRef().relocations()) {
+    const coff_relocation *Rel = File->COFFFile->getCOFFRelocation(I);
     if (auto *S = dyn_cast<Defined>(File->getSymbol(Rel->SymbolTableIndex)->Body))
       S->markLive();
   }
@@ -66,18 +63,15 @@ void SectionChunk::addAssociative(SectionChunk *Child) {
 }
 
 void SectionChunk::applyRelocations(uint8_t *Buffer) {
-  DataRefImpl Ref;
-  Ref.p = uintptr_t(Header);
-  COFFObjectFile *FP = File->COFFFile.get();
-  for (const auto &I : SectionRef(Ref, FP).relocations()) {
-    const coff_relocation *Rel = FP->getCOFFRelocation(I);
+  for (const auto &I : getSectionRef().relocations()) {
+    const coff_relocation *Rel = File->COFFFile->getCOFFRelocation(I);
     applyReloc(Buffer, Rel);
   }
 }
 
-static void add16(uint8_t *L, int32_t V) { write16le(L, read16le(L) + V); }
-static void add32(uint8_t *L, int32_t V) { write32le(L, read32le(L) + V); }
-static void add64(uint8_t *L, int64_t V) { write64le(L, read64le(L) + V); }
+static void add16(uint8_t *P, int32_t V) { write16le(P, read16le(P) + V); }
+static void add32(uint8_t *P, int32_t V) { write32le(P, read32le(P) + V); }
+static void add64(uint8_t *P, int64_t V) { write64le(P, read64le(P) + V); }
 
 void SectionChunk::applyReloc(uint8_t *Buffer, const coff_relocation *Rel) {
   using namespace llvm::COFF;
@@ -85,7 +79,6 @@ void SectionChunk::applyReloc(uint8_t *Buffer, const coff_relocation *Rel) {
   auto *Body = cast<Defined>(File->getSymbol(Rel->SymbolTableIndex)->Body);
   uint64_t S = Body->getRVA();
   uint64_t P = RVA + Rel->VirtualAddress;
-  OutputSection *Sec = getOutputSection();
   switch (Rel->Type) {
   case IMAGE_REL_AMD64_ADDR32:   add32(Off, ImageBase + S); break;
   case IMAGE_REL_AMD64_ADDR64:   add64(Off, ImageBase + S); break;
@@ -96,8 +89,8 @@ void SectionChunk::applyReloc(uint8_t *Buffer, const coff_relocation *Rel) {
   case IMAGE_REL_AMD64_REL32_3:  add32(Off, S - P - 7); break;
   case IMAGE_REL_AMD64_REL32_4:  add32(Off, S - P - 8); break;
   case IMAGE_REL_AMD64_REL32_5:  add32(Off, S - P - 9); break;
-  case IMAGE_REL_AMD64_SECTION:  add16(Off, Sec->getSectionIndex()); break;
-  case IMAGE_REL_AMD64_SECREL:   add32(Off, S - Sec->getRVA()); break;
+  case IMAGE_REL_AMD64_SECTION:  add16(Off, Out->getSectionIndex()); break;
+  case IMAGE_REL_AMD64_SECREL:   add32(Off, S - Out->getRVA()); break;
   default:
     llvm::report_fatal_error("Unsupported relocation type");
   }
@@ -109,10 +102,6 @@ bool SectionChunk::isBSS() const {
 
 uint32_t SectionChunk::getPermissions() const {
   return Header->Characteristics & PermMask;
-}
-
-size_t SectionChunk::getSize() const {
-  return Header->SizeOfRawData;
 }
 
 bool SectionChunk::isCOMDAT() const {
@@ -136,13 +125,16 @@ void SectionChunk::printDiscardMessage() {
   }
 }
 
-size_t CommonChunk::getSize() const {
-  return Sym.getValue();
+SectionRef SectionChunk::getSectionRef() {
+  DataRefImpl Ref;
+  Ref.p = uintptr_t(Header);
+  return SectionRef(Ref, File->COFFFile.get());
 }
 
 uint32_t CommonChunk::getPermissions() const {
   using namespace llvm::COFF;
-  return IMAGE_SCN_CNT_UNINITIALIZED_DATA | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE;
+  return IMAGE_SCN_CNT_UNINITIALIZED_DATA | IMAGE_SCN_MEM_READ
+    | IMAGE_SCN_MEM_WRITE;
 }
 
 void ImportFuncChunk::applyRelocations(uint8_t *Buffer) {
@@ -151,22 +143,23 @@ void ImportFuncChunk::applyRelocations(uint8_t *Buffer) {
 }
 
 HintNameChunk::HintNameChunk(StringRef Name)
-  : Data(new std::vector<uint8_t>(llvm::RoundUpToAlignment(Name.size() + 4, 2))) {
-  memcpy(&((*Data)[2]), Name.data(), Name.size());
+  : Data(RoundUpToAlignment(Name.size() + 4, 2)) {
+  memcpy(&Data[2], Name.data(), Name.size());
 }
 
 void LookupChunk::applyRelocations(uint8_t *Buffer) {
-  write32le(Buffer + getFileOff(), HintName->getRVA());
+  write32le(Buffer + FileOff, HintName->getRVA());
 }
 
 void DirectoryChunk::applyRelocations(uint8_t *Buffer) {
-  auto *E = (llvm::COFF::ImportDirectoryTableEntry *)(Buffer + getFileOff());
+  auto *E = (llvm::COFF::ImportDirectoryTableEntry *)(Buffer + FileOff);
   E->ImportLookupTableRVA = LookupTab->getRVA();
   E->NameRVA = DLLName->getRVA();
   E->ImportAddressTableRVA = AddressTab->getRVA();
 }
 
-ImportTable::ImportTable(StringRef N, std::vector<DefinedImportData *> &Symbols) {
+ImportTable::ImportTable(StringRef N,
+                         std::vector<DefinedImportData *> &Symbols) {
   DLLName = new StringChunk(N);
   DirTab = new DirectoryChunk(DLLName);
   for (DefinedImportData *S : Symbols)
