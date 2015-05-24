@@ -52,6 +52,8 @@ void OutputSection::setRVA(uint64_t RVA) {
 }
 
 void OutputSection::setFileOffset(uint64_t Off) {
+  if (Header.SizeOfRawData == 0)
+    return;
   Header.PointerToRawData = Off;
   for (Chunk *C : Chunks)
     C->setFileOff(C->getFileOff() + Off);
@@ -71,12 +73,6 @@ void OutputSection::addChunk(Chunk *C) {
 
 void OutputSection::addPermissions(uint32_t C) {
   Header.Characteristics = Header.Characteristics | (C & PermMask);
-}
-
-const llvm::object::coff_section *OutputSection::getHeader() {
-  if (Header.SizeOfRawData == 0)
-    Header.PointerToRawData = 0;
-  return &Header;
 }
 
 static StringRef dropDollar(StringRef S) {

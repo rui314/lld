@@ -36,7 +36,7 @@ public:
   uint64_t getSectionIndex() { return SectionIndex; }
   std::vector<Chunk *> &getChunks() { return Chunks; }
 
-  const llvm::object::coff_section *getHeader();
+  const llvm::object::coff_section *getHeader() { return &Header; }
   void addPermissions(uint32_t C);
   uint32_t getPermissions() { return Header.Characteristics & PermMask; }
   uint32_t getCharacteristics() { return Header.Characteristics; }
