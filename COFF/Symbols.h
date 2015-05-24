@@ -133,7 +133,7 @@ public:
   bool isCOMDAT() const { return Section->isCOMDAT(); }
 
   // Returns true if this is a common symbol.
-  bool isCommon() const { return Section->isCommon(); }
+  bool isCommon() const { return Sym.isCommon(); }
   uint32_t getCommonSize() const { return Sym.getValue(); }
 
 private:

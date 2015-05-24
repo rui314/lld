@@ -60,7 +60,6 @@ public:
 
   virtual bool isBSS() const { return false; }
   virtual bool isCOMDAT() const { return false; }
-  virtual bool isCommon() const { return false; }
 
   // Returns readable/writable/executable bits.
   virtual uint32_t getPermissions() const { return 0; }
@@ -148,7 +147,6 @@ public:
   CommonChunk(const COFFSymbolRef S) : Sym(S) {}
   size_t getSize() const override { return Sym.getValue(); }
   bool isBSS() const override { return true; }
-  bool isCommon() const override { return true; }
   uint32_t getPermissions() const override;
   StringRef getSectionName() const override { return ".bss"; }
 
