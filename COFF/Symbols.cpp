@@ -41,6 +41,7 @@ ErrorOr<std::unique_ptr<InputFile>> CanBeDefined::getMember() {
   ErrorOr<std::unique_ptr<ObjectFile>> FileOrErr = ObjectFile::create(Filename, MBRef);
   if (auto EC = FileOrErr.getError())
     return EC;
+  File->setParentName(File->Name);
   return std::move(FileOrErr.get());
 }
 

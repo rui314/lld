@@ -190,7 +190,6 @@ std::error_code SymbolTable::addMemberFile(CanBeDefined *Body) {
   // read from the library.
   if (!File)
     return std::error_code();
-  File->setParentName(Body->File->Name);
   if (Config->Verbose)
     llvm::dbgs() << "Loaded " << File->getShortName() << " for " << Body->getName() << "\n";
   return addFile(std::move(File));

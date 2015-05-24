@@ -180,9 +180,8 @@ public:
 
   ErrorOr<std::unique_ptr<InputFile>> getMember();
 
-  ArchiveFile *File;
-
 private:
+  ArchiveFile *File;
   const Archive::Symbol Sym;
 };
 
