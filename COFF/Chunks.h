@@ -36,7 +36,7 @@ class OutputSection;
 // doesn't even have actual data (if common or bss).
 class Chunk {
 public:
-  ~Chunk() {}
+  virtual ~Chunk() {}
 
   // Returns the pointer to data. It is illegal to call this function if
   // this is a common or BSS chunk.
