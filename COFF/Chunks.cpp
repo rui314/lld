@@ -109,6 +109,7 @@ bool SectionChunk::isCOMDAT() const {
   return Header->Characteristics & llvm::COFF::IMAGE_SCN_LNK_COMDAT;
 }
 
+// Prints "Discarded <symbolname>" for all external function symbols.
 void SectionChunk::printDiscardMessage() {
   uint32_t E = File->getCOFFObj()->getNumberOfSymbols();
   for (uint32_t I = 0; I < E; ++I) {
