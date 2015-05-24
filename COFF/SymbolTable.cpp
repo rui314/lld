@@ -100,7 +100,7 @@ bool SymbolTable::reportRemainingUndefines() {
 
 // This function resolves conflicts if there's an existing symbol with
 // the same name. Decisions are made based on symbol types.
-// (This function is designed to be easily parallelizable using
+// (This function is designed to be parallelized easily using
 // pointer compare-and-swap.)
 std::error_code SymbolTable::resolve(SymbolBody *New, Symbol **SymP) {
   StringRef Name = New->getName();

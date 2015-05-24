@@ -42,7 +42,15 @@ public:
   uint32_t getCharacteristics() { return Header.Characteristics; }
   uint64_t getRVA() { return Header.VirtualAddress; }
   uint64_t getFileOff() { return Header.PointerToRawData; }
+
+  // Returns the size of this section in an executable memory image.
+  // This may be smaller than the raw size (the raw size is multiple
+  // of disk sector size, so there may be padding at end), or may be
+  // larger (if that's the case, the loader reserves spaces after end
+  // of raw data).
   uint64_t getVirtualSize() { return Header.VirtualSize; }
+
+  // Returns the size of the section in the output file.
   uint64_t getRawSize() { return Header.SizeOfRawData; }
 
 private:
@@ -77,10 +85,6 @@ private:
 
   SymbolTable *Symtab;
   std::unique_ptr<llvm::FileOutputBuffer> Buffer;
-  llvm::object::coff_file_header *COFF;
-  llvm::object::pe32plus_header *PE;
-  llvm::object::data_directory *DataDirectory;
-  llvm::object::coff_section *SectionTable;
   std::vector<std::unique_ptr<OutputSection>> OutputSections;
   Chunk *ImportAddressTable = nullptr;
   uint32_t ImportAddressTableSize = 0;

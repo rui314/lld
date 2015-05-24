@@ -240,7 +240,7 @@ void Writer::writeHeader() {
   P += sizeof(llvm::COFF::PEMagic);
 
   // Write COFF header
-  COFF = reinterpret_cast<coff_file_header *>(P);
+  coff_file_header *COFF = reinterpret_cast<coff_file_header *>(P);
   P += sizeof(coff_file_header);
   COFF->Machine = llvm::COFF::IMAGE_FILE_MACHINE_AMD64;
   COFF->NumberOfSections = OutputSections.size();
@@ -252,7 +252,7 @@ void Writer::writeHeader() {
       sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
 
   // Write PE header
-  PE = reinterpret_cast<pe32plus_header *>(P);
+  pe32plus_header *PE = reinterpret_cast<pe32plus_header *>(P);
   P += sizeof(pe32plus_header);
   PE->Magic = llvm::COFF::PE32Header::PE32_PLUS;
   PE->ImageBase = Config->ImageBase;
@@ -275,7 +275,7 @@ void Writer::writeHeader() {
   PE->SizeOfInitializedData = getSizeOfInitializedData();
 
   // Write data directory
-  DataDirectory = reinterpret_cast<data_directory *>(P);
+  data_directory *DataDirectory = reinterpret_cast<data_directory *>(P);
   P += sizeof(data_directory) * NumberfOfDataDirectory;
   if (OutputSection *Idata = findSection(".idata")) {
     using namespace llvm::COFF;
@@ -286,7 +286,7 @@ void Writer::writeHeader() {
   }
 
   // Write section table
-  SectionTable = reinterpret_cast<coff_section *>(P);
+  coff_section *SectionTable = reinterpret_cast<coff_section *>(P);
   int Idx = 0;
   for (std::unique_ptr<OutputSection> &Out : OutputSections)
     SectionTable[Idx++] = *Out->getHeader();
