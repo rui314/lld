@@ -37,12 +37,13 @@ ErrorOr<std::unique_ptr<InputFile>> CanBeDefined::getMember() {
   if (Magic != file_magic::coff_object)
     return make_dynamic_error_code("unknown file type");
 
-  StringRef Filename = MBRef.getBufferIdentifier();
-  ErrorOr<std::unique_ptr<ObjectFile>> FileOrErr = ObjectFile::create(Filename, MBRef);
+  ErrorOr<std::unique_ptr<ObjectFile>> FileOrErr
+    = ObjectFile::create(MBRef.getBufferIdentifier(), MBRef);
   if (auto EC = FileOrErr.getError())
     return EC;
-  File->setParentName(File->Name);
-  return std::move(FileOrErr.get());
+  std::unique_ptr<ObjectFile> Obj = std::move(FileOrErr.get());
+  Obj->setParentName(File->Name);
+  return std::move(Obj);
 }
 
 }
