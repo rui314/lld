@@ -100,89 +100,34 @@ bool SymbolTable::reportRemainingUndefines() {
 
 // This function resolves conflicts if there's an existing symbol with
 // the same name. Decisions are made based on symbol types.
-std::error_code SymbolTable::resolve(SymbolBody *Body, Symbol **RefP) {
-  StringRef Name = Body->getName();
-  auto *NewVal = new (Alloc) Symbol(nullptr);
-  auto Res = Symtab.insert(std::make_pair(Name, NewVal));
-  Symbol *Ref = Res.second ? NewVal : Res.first->second;
+std::error_code SymbolTable::resolve(SymbolBody *New, Symbol **SymP) {
+  StringRef Name = New->getName();
+  auto *NewSym = new (Alloc) Symbol(nullptr);
+  auto Res = Symtab.insert(std::make_pair(Name, NewSym));
+  Symbol *Sym = Res.second ? NewSym : Res.first->second;
 
-  // RefP is not significant in this function. It's here to reduce the
+  // SymP is not significant in this function. It's here to reduce the
   // number of hash table lookups in the caller.
-  if (RefP)
-    *RefP = Ref;
+  if (SymP)
+    *SymP = Sym;
 
   // If nothing exists yet, just add a new one.
-  if (Ref->Body == nullptr) {
-    Ref->Body = Body;
+  if (Sym->Body == nullptr) {
+    Sym->Body = New;
     return std::error_code();
   }
 
-  if (isa<Undefined>(Ref->Body)) {
-    // Undefined and Undefined: There are two object files referencing
-    // the same undefined symbol. Undefined symbols don't have much
-    // identity, so a selection is arbitrary. We choose the existing
-    // one.
-    if (auto *New = dyn_cast<Undefined>(Body)) {
-      if (New->getWeakAlias())
-        Ref->Body = New;
-      return std::error_code();
-    }
+  SymbolBody *Existing = Sym->Body;
+  int comp = Existing->compare(New);
+  if (comp < 0)
+    Sym->Body = New;
+  if (comp == 0)
+    return make_dynamic_error_code(Twine("duplicate symbol: ") + Name);
 
-    // CanBeDefined and Undefined: Read an archive member file pointed
-    // by the CanBeDefined symbol to resolve the Undefined symbol.
-    if (auto *New = dyn_cast<CanBeDefined>(Body))
-      return addMemberFile(New);
-
-    // Undefined and Defined: An undefined symbol is now being
-    // resolved. Select the Defined symbol.
-    assert(isa<Defined>(Body));
-    Ref->Body = Body;
-    return std::error_code();
-  }
-
-  if (auto *Existing = dyn_cast<CanBeDefined>(Ref->Body)) {
-    if (isa<Defined>(Body)) {
-      Ref->Body = Body;
-      return std::error_code();
-    }
-
-    // CanBeDefined and CanBeDefined: We have two libraries having the
-    // same symbol. We probably should print a warning message.
-    if (isa<CanBeDefined>(Body))
-      return std::error_code();
-
-    auto *New = cast<Undefined>(Body);
-    if (New->getWeakAlias()) {
-      Ref->Body = Body;
-      return std::error_code();
-    }
-    return addMemberFile(Existing);
-  }
-
-  // Both symbols are defined symbols. Select one of them if they are
-  // Common or COMDAT symbols.
-  Defined *Existing = cast<Defined>(Ref->Body);
-  if (isa<Undefined>(Body) || isa<CanBeDefined>(Body))
-    return std::error_code();
-  Defined *New = cast<Defined>(Body);
-
-  // Common symbols
-  if (Existing->isCommon()) {
-    if (New->isCommon()) {
-      if (Existing->getCommonSize() < New->getCommonSize())
-        Ref->Body = New;
-      return std::error_code();
-    }
-    Ref->Body = New;
-    return std::error_code();
-  }
-  if (New->isCommon())
-    return std::error_code();
-
-  // COMDAT symbols
-  if (Existing->isCOMDAT() && New->isCOMDAT())
-      return std::error_code();
-  return make_dynamic_error_code(Twine("duplicate symbol: ") + Ref->Body->getName());
+  if (isa<Undefined>(Existing) || isa<Undefined>(New))
+    if (auto *B = dyn_cast<CanBeDefined>(Sym->Body))
+      return addMemberFile(B);
+  return std::error_code();
 }
 
 std::error_code SymbolTable::addMemberFile(CanBeDefined *Body) {
@@ -196,7 +141,8 @@ std::error_code SymbolTable::addMemberFile(CanBeDefined *Body) {
   if (!File)
     return std::error_code();
   if (Config->Verbose)
-    llvm::dbgs() << "Loaded " << File->getShortName() << " for " << Body->getName() << "\n";
+    llvm::dbgs() << "Loaded " << File->getShortName()
+                 << " for " << Body->getName() << "\n";
   return addFile(std::move(File));
 }
 

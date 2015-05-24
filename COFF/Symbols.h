@@ -69,6 +69,11 @@ public:
   void setBackref(Symbol *P) { Backref = P; }
   Symbol *getSymbol() { return Backref; }
 
+  // Decides which symbol should "win" in the symbol table, this or
+  // the Other. Returns 1 if this wins, -1 if the Other wins, or 0 if
+  // they are duplicate (conflicting) symbols.
+  virtual int compare(SymbolBody *Other) = 0;
+
 protected:
   SymbolBody(Kind K, StringRef N) : SymbolKind(K), Name(N) {}
 
@@ -97,24 +102,11 @@ public:
   // The writer uses this information to apply relocations.
   virtual uint64_t getFileOff() = 0;
 
-  // Returns true if this is a common symbol.
-  virtual bool isCommon() const { return false; }
-
-  // Returns the size of a common symbol. If the resolver finds
-  // multiple common symbols for the same name, it selects the
-  // largest.
-  virtual uint32_t getCommonSize() const {
-    llvm::report_fatal_error("not implemeneted");
-  }
-
-  // Returns true if this is a COMDAT symbol. Usually, it is an error
-  // if there are more than one defined symbols having the same name,
-  // but COMDAT symbols are allowed to be duplicated.
-  virtual bool isCOMDAT() const { return false; }
-
   // Called by the garbage collector. All Defined subclasses should
   // know how to call markLive to dependent symbols.
   virtual void markLive() {}
+
+  int compare(SymbolBody *Other) override;
 };
 
 // Regular defined symbols read from object file symbol tables.
@@ -128,8 +120,6 @@ public:
   }
 
   uint64_t getRVA() override { return Section->getRVA() + Sym.getValue(); }
-  bool isCommon() const override { return Section->isCommon(); }
-  bool isCOMDAT() const override { return Section->isCOMDAT(); }
   bool isExternal() override { return Sym.isExternal(); }
   void markLive() override { Section->markLive(); }
 
@@ -137,10 +127,14 @@ public:
     return Section->getFileOff() + Sym.getValue();
   }
 
-  uint32_t getCommonSize() const override {
-    assert(isCommon());
-    return Sym.getValue();
-  }
+  // Returns true if this is a COMDAT symbol. Usually, it is an error
+  // if there are more than one defined symbols having the same name,
+  // but COMDAT symbols are allowed to be duplicated.
+  bool isCOMDAT() const { return Section->isCOMDAT(); }
+
+  // Returns true if this is a common symbol.
+  bool isCommon() const { return Section->isCommon(); }
+  uint32_t getCommonSize() const { return Sym.getValue(); }
 
 private:
   ObjectFile *File;
@@ -232,6 +226,8 @@ public:
   // was already returned.
   ErrorOr<std::unique_ptr<InputFile>> getMember();
 
+  int compare(SymbolBody *Other) override;
+
 private:
   ArchiveFile *File;
   const Archive::Symbol Sym;
@@ -252,6 +248,8 @@ public:
   // If it remains undefined, it'll be replaced with whatever the
   // Alias pointer points to.
   SymbolBody *getWeakAlias() { return Alias ? *Alias : nullptr; }
+
+  int compare(SymbolBody *Other) override;
 
 private:
   SymbolBody **Alias;
