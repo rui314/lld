@@ -81,8 +81,8 @@ void SectionChunk::applyReloc(uint8_t *Buffer, const coff_relocation *Rel) {
   uint64_t S = Body->getRVA();
   uint64_t P = RVA + Rel->VirtualAddress;
   switch (Rel->Type) {
-  case IMAGE_REL_AMD64_ADDR32:   add32(Off, ImageBase + S); break;
-  case IMAGE_REL_AMD64_ADDR64:   add64(Off, ImageBase + S); break;
+  case IMAGE_REL_AMD64_ADDR32:   add32(Off, Config->ImageBase + S); break;
+  case IMAGE_REL_AMD64_ADDR64:   add64(Off, Config->ImageBase + S); break;
   case IMAGE_REL_AMD64_ADDR32NB: add32(Off, S); break;
   case IMAGE_REL_AMD64_REL32:    add32(Off, S - P - 4); break;
   case IMAGE_REL_AMD64_REL32_1:  add32(Off, S - P - 5); break;

@@ -11,6 +11,7 @@
 #define LLD_COFF_SYMBOLS_H
 
 #include "Chunks.h"
+#include "Config.h"
 #include "lld/Core/LLVM.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Object/Archive.h"
@@ -23,8 +24,6 @@ using llvm::object::COFFSymbolRef;
 
 namespace lld {
 namespace coff {
-
-static const uint64_t ImageBase = 0x140000000;
 
 class ArchiveFile;
 class InputFile;
@@ -146,7 +145,7 @@ private:
 class DefinedAbsolute : public Defined {
 public:
   DefinedAbsolute(StringRef Name, uint64_t VA)
-    : Defined(DefinedAbsoluteKind, Name), RVA(VA - ImageBase) {}
+    : Defined(DefinedAbsoluteKind, Name), RVA(VA - Config->ImageBase) {}
 
   static bool classof(const SymbolBody *S) {
     return S->kind() == DefinedAbsoluteKind;

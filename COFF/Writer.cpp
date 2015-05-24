@@ -80,7 +80,8 @@ static StringRef dropDollar(StringRef S) {
 }
 
 void Writer::markLive() {
-  cast<Defined>(Symtab->find("mainCRTStartup"))->markLive();
+  Entry = cast<Defined>(Symtab->find(Config->EntryName));
+  Entry->markLive();
   for (Chunk *C : Symtab->getChunks())
     if (C->isRoot())
       C->markLive();
@@ -89,21 +90,26 @@ void Writer::markLive() {
 void Writer::createSections() {
   std::map<StringRef, std::vector<Chunk *>> Map;
   for (Chunk *C : Symtab->getChunks()) {
-    if (C->isLive()) {
-      Map[dropDollar(C->getSectionName())].push_back(C);
+    if (!C->isLive()) {
+      if (Config->Verbose)
+        C->printDiscardMessage();
       continue;
     }
-    if (Config->Verbose)
-      C->printDiscardMessage();
+    // '$' and all following characters in input section names are
+    // discarded when determining output section. So, .text$foo
+    // contributes to .text, for example. See PE/COFF spec 3.2.
+    Map[dropDollar(C->getSectionName())].push_back(C);
   }
 
-  auto comp = [](Chunk *A, Chunk *B) {
+  // Input sections are ordered by their names including '$' parts,
+  // which gives you some control over the output layout.
+  auto Comp = [](Chunk *A, Chunk *B) {
     return A->getSectionName() < B->getSectionName();
   };
   for (auto &P : Map) {
     StringRef SectionName = P.first;
     std::vector<Chunk *> &Chunks = P.second;
-    std::stable_sort(Chunks.begin(), Chunks.end(), comp);
+    std::stable_sort(Chunks.begin(), Chunks.end(), Comp);
     auto Sec = llvm::make_unique<OutputSection>(SectionName, OutputSections.size());
     for (Chunk *C : Chunks) {
       C->setOutputSection(Sec.get());
@@ -115,29 +121,34 @@ void Writer::createSections() {
 }
 
 std::map<StringRef, std::vector<DefinedImportData *>> Writer::binImports() {
+  // Group DLL-imported symbols by DLL name because that's how symbols
+  // are layed out in the import descriptor table.
   std::map<StringRef, std::vector<DefinedImportData *>> Res;
   OutputSection *Text = createSection(".text");
   for (std::unique_ptr<ImportFile> &P : Symtab->ImportFiles) {
-    for (std::unique_ptr<SymbolBody> &S : P->getSymbols()) {
-      if (auto *Body = dyn_cast<DefinedImportData>(S.get())) {
-        Res[Body->getDLLName()].push_back(Body);
+    for (std::unique_ptr<SymbolBody> &B : P->getSymbols()) {
+      if (auto *Import = dyn_cast<DefinedImportData>(B.get())) {
+        Res[Import->getDLLName()].push_back(Import);
         continue;
       }
-      Text->addChunk(cast<DefinedImportFunc>(S.get())->getChunk());
+      // Linker-created function thunks for DLL symbols are added to
+      // .text section.
+      Text->addChunk(cast<DefinedImportFunc>(B.get())->getChunk());
     }
   }
 
-  // Sort by symbol name
-  auto comp = [](DefinedImportData *A, DefinedImportData *B) {
+  // Sort symbols by name for each group.
+  auto Comp = [](DefinedImportData *A, DefinedImportData *B) {
     return A->getName() < B->getName();
   };
   for (auto &P : Res) {
     std::vector<DefinedImportData *> &V = P.second;
-    std::sort(V.begin(), V.end(), comp);
+    std::sort(V.begin(), V.end(), Comp);
   }
   return Res;
 }
 
+// Create .idata section contents.
 void Writer::createImportTables() {
   if (Symtab->ImportFiles.empty())
     return;
@@ -187,6 +198,8 @@ void Writer::createImportTables() {
     Chunks.push_back(std::unique_ptr<Chunk>(Idata->getChunks()[I]));
 }
 
+// The Windows loader doesn't seem to like empty sections,
+// so we remove them if any.
 void Writer::removeEmptySections() {
   auto IsEmpty = [](const std::unique_ptr<OutputSection> &S) {
     return S->getVirtualSize() == 0;
@@ -197,10 +210,12 @@ void Writer::removeEmptySections() {
                        OutputSections.end());
 }
 
+// Visits all sections to assign incremental, non-overlapping RVAs and
+// file offsets.
 void Writer::assignAddresses() {
   uint64_t HeaderEnd = RoundUpToAlignment(
     HeaderSize + sizeof(coff_section) * OutputSections.size(), PageSize);
-  uint64_t RVA = 0x1000;
+  uint64_t RVA = 0x1000; // The first page is kept unmapped.
   uint64_t FileOff = HeaderEnd;
   for (std::unique_ptr<OutputSection> &Sec : OutputSections) {
     Sec->setRVA(RVA);
@@ -241,16 +256,14 @@ void Writer::writeHeader() {
   PE = reinterpret_cast<pe32plus_header *>(P);
   P += sizeof(pe32plus_header);
   PE->Magic = llvm::COFF::PE32Header::PE32_PLUS;
-  PE->ImageBase = ImageBase;
+  PE->ImageBase = Config->ImageBase;
   PE->SectionAlignment = SectionAlignment;
   PE->FileAlignment = FileAlignment;
-  PE->MajorOperatingSystemVersion = 6;
   PE->MajorOperatingSystemVersion = 6;
   PE->MajorSubsystemVersion = 6;
   PE->Subsystem = llvm::COFF::IMAGE_SUBSYSTEM_WINDOWS_CUI;
   PE->SizeOfImage = SizeOfImage;
-  uint64_t Entry = cast<Defined>(Symtab->find("mainCRTStartup"))->getRVA();
-  PE->AddressOfEntryPoint = Entry;
+  PE->AddressOfEntryPoint = Entry->getRVA();
   PE->SizeOfStackReserve = 1024 * 1024;
   PE->SizeOfStackCommit = 4096;
   PE->SizeOfHeapReserve = 1024 * 1024;
@@ -260,8 +273,7 @@ void Writer::writeHeader() {
     PE->BaseOfCode = Text->getRVA();
     PE->SizeOfCode = Text->getRawSize();
   }
-  PE->SizeOfInitializedData = getTotalSectionSize(llvm::COFF::IMAGE_SCN_CNT_INITIALIZED_DATA);
-  PE->SizeOfUninitializedData = getTotalSectionSize(llvm::COFF::IMAGE_SCN_CNT_UNINITIALIZED_DATA);
+  PE->SizeOfInitializedData = getSizeOfInitializedData();
 
   // Write data directory
   DataDirectory = reinterpret_cast<data_directory *>(P);
@@ -274,7 +286,7 @@ void Writer::writeHeader() {
     DataDirectory[IAT].Size = ImportAddressTableSize;
   }
 
-  // The section table immediately follows the data directory.
+  // Write section table
   SectionTable = reinterpret_cast<coff_section *>(P);
   int Idx = 0;
   for (std::unique_ptr<OutputSection> &Out : OutputSections)
@@ -290,9 +302,13 @@ std::error_code Writer::openFile(StringRef Path) {
   return std::error_code();
 }
 
+// Write section contents to a mmap'ed file.
 void Writer::writeSections() {
   uint8_t *P = Buffer->getBufferStart();
   for (std::unique_ptr<OutputSection> &Sec : OutputSections) {
+    // Fill gaps between functions in .text with INT3 instructions
+    // instead of leaving as NUL bytes (which can be interpreted as
+    // ADD instructions).
     if (Sec->getPermissions() & llvm::COFF::IMAGE_SCN_CNT_CODE)
       memset(P + Sec->getFileOff(), 0xCC, Sec->getRawSize());
     for (Chunk *C : Sec->getChunks())
@@ -308,18 +324,20 @@ OutputSection *Writer::findSection(StringRef Name) {
   return nullptr;
 }
 
-uint32_t Writer::getTotalSectionSize(uint32_t Perm) {
+uint32_t Writer::getSizeOfInitializedData() {
+  using llvm::COFF::IMAGE_SCN_CNT_INITIALIZED_DATA;
   uint32_t Res = 0;
   for (std::unique_ptr<OutputSection> &S : OutputSections)
-    if (S->getPermissions() & Perm)
+    if (S->getPermissions() & IMAGE_SCN_CNT_INITIALIZED_DATA)
       Res += S->getRawSize();
   return Res;
 }
 
+// Returns an existing section or create a new one if not found.
 OutputSection *Writer::createSection(StringRef Name) {
   using namespace llvm::COFF;
-  if (auto *S = findSection(Name))
-    return S;
+  if (auto *Sec = findSection(Name))
+    return Sec;
   const auto Read = IMAGE_SCN_MEM_READ;
   const auto Write = IMAGE_SCN_MEM_WRITE;
   const auto Execute = IMAGE_SCN_MEM_EXECUTE;
@@ -332,10 +350,10 @@ OutputSection *Writer::createSection(StringRef Name) {
     .Default(0);
   if (!Perm)
     llvm_unreachable("unknown section name");
-  auto S = new OutputSection(Name, OutputSections.size());
-  S->addPermissions(Perm);
-  OutputSections.push_back(std::unique_ptr<OutputSection>(S));
-  return S;
+  auto Sec = new OutputSection(Name, OutputSections.size());
+  Sec->addPermissions(Perm);
+  OutputSections.push_back(std::unique_ptr<OutputSection>(Sec));
+  return Sec;
 }
 
 void Writer::applyRelocations() {

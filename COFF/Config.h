@@ -11,7 +11,9 @@
 #define LLD_COFF_CONFIG_H
 
 #include "llvm/ADT/StringRef.h"
+#include <cstdint>
 #include <set>
+#include <string>
 
 namespace lld {
 namespace coff {
@@ -19,6 +21,8 @@ namespace coff {
 class Configuration {
 public:
   bool Verbose = false;
+  std::string EntryName = "mainCRTStartup";
+  uint64_t ImageBase = 0x140000000;
 
   bool insertFile(llvm::StringRef Path) {
     return VisitedFiles.insert(Path.lower()).second;

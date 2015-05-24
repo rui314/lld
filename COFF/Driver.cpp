@@ -170,6 +170,8 @@ ErrorOr<std::unique_ptr<InputFile>> createFile(StringRef Path) {
   return ObjectFile::create(Path);
 }
 
+// Parses .drectve section contents and returns a list of files
+// specified by /defaultlib.
 std::error_code parseDirectives(StringRef S,
                                 std::vector<std::unique_ptr<InputFile>> *Res,
                                 StringAllocator *Alloc) {
@@ -199,6 +201,7 @@ std::error_code parseDirectives(StringRef S,
 }
 
 bool link(int Argc, const char *Argv[]) {
+  // Parse command line options.
   Config = new Configuration();
   auto ArgsOrErr = parseArgs(Argc, Argv);
   if (auto EC = ArgsOrErr.getError()) {
@@ -210,6 +213,8 @@ bool link(int Argc, const char *Argv[]) {
   if (Args->hasArg(OPT_verbose))
     Config->Verbose = true;
 
+  // Parse all input files and put all symbols to the symbol table.
+  // The symbol table will take care of name resolution.
   SymbolTable Symtab;
   for (auto *Arg : Args->filtered(OPT_INPUT)) {
     std::string Path = findFile(Arg->getValue());
@@ -222,15 +227,16 @@ bool link(int Argc, const char *Argv[]) {
       return false;
     }
     if (auto EC = Symtab.addFile(std::move(FileOrErr.get()))) {
-      llvm::errs() << "addFile failed: " << Path << ": " << EC.message() << "\n";
+      llvm::errs() << Path << ": " << EC.message() << "\n";
       return false;
     }
   }
   if (Symtab.reportRemainingUndefines())
     return false;
 
-  Writer OutFile(&Symtab);
-  if (auto EC = OutFile.write(getOutputPath(Args.get()))) {
+  // Emit the result.
+  Writer Out(&Symtab);
+  if (auto EC = Out.write(getOutputPath(Args.get()))) {
     llvm::errs() << EC.message() << "\n";
     return false;
   }

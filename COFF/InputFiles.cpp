@@ -60,9 +60,12 @@ ErrorOr<std::unique_ptr<ArchiveFile>> ArchiveFile::create(StringRef Path) {
 ArchiveFile::ArchiveFile(StringRef N, std::unique_ptr<Archive> F,
                          std::unique_ptr<MemoryBuffer> M)
     : InputFile(ArchiveKind), Name(N), File(std::move(F)), MB(std::move(M)) {
-  for (const Archive::Symbol &Sym : File->symbols())
-    if (Sym.getName() != "__NULL_IMPORT_DESCRIPTOR")
-      SymbolBodies.push_back(llvm::make_unique<CanBeDefined>(this, Sym));
+  for (const Archive::Symbol &Sym : File->symbols()) {
+    // Skip special symbol exists in import library files.
+    if (Sym.getName() == "__NULL_IMPORT_DESCRIPTOR")
+      continue;
+    SymbolBodies.push_back(llvm::make_unique<CanBeDefined>(this, Sym));
+  }
 }
 
 ErrorOr<MemoryBufferRef>
@@ -158,6 +161,7 @@ void ObjectFile::initializeSymbols() {
       llvm::errs() << "broken object file: " << Name << ": " << EC.message() << "\n";
       break;
     }
+    // Skip special symbols.
     if (SymbolName == "@comp.id" || SymbolName == "@feat.00")
       continue;
 
@@ -197,7 +201,7 @@ SymbolBody *ObjectFile::createSymbolBody(StringRef Name, COFFSymbolRef Sym,
       auto *Aux = (coff_aux_section_definition *)AuxP;
       auto *Parent = (SectionChunk *)(SparseChunks[Aux->getNumber(Sym.isBigObj())]);
       if (Parent)
-        Parent->addAssociative(cast<SectionChunk>(C));
+        Parent->addAssociative((SectionChunk *)C);
     }
   }
   if (Chunk *C = SparseChunks[Sym.getSectionNumber()])
@@ -219,7 +223,7 @@ ObjectFile::create(StringRef Path, MemoryBufferRef MBRef) {
   return std::move(File);
 }
 
-void ImportFile::readImport() {
+void ImportFile::readImports() {
   const char *Buf = MBRef.getBufferStart();
   const char *End = MBRef.getBufferEnd();
 

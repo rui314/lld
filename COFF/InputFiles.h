@@ -125,9 +125,26 @@ private:
   std::unique_ptr<COFFObjectFile> COFFObj;
   std::unique_ptr<MemoryBuffer> MB;
   StringRef Directives;
+
+  // List of all chunks defined by this file. The first chunks
+  // represents sections which may be followed by other non-section
+  // chunks such as common symbols.
   std::vector<std::unique_ptr<Chunk>> Chunks;
+
+  // This vector contains the same chunks as Chunks, but they are
+  // indexed such that you can get a SectionChunk by section
+  // index. Nonexistent section indices are filled with null pointers.
+  // (Because section 0 is reserved for undefined symbols, the first
+  // slot is always a null pointer.)
   std::vector<Chunk *> SparseChunks;
+
+  // List of all symbols referenced or defined by this file.
   std::vector<std::unique_ptr<SymbolBody>> SymbolBodies;
+
+  // This vector contains the same symbols as SymbolBodies, but they
+  // are indexed such that you can get a SymbolBody by symbol
+  // index. Nonexistent indices (which are occupied by auxiliary
+  // symbols in the real symbol table) are filled by null pointers.
   std::vector<SymbolBody *> SparseSymbolBodies;
 };
 
@@ -137,7 +154,7 @@ private:
 class ImportFile : public InputFile {
 public:
   ImportFile(MemoryBufferRef M) : InputFile(ImportKind), MBRef(M) {
-    readImport();
+    readImports();
   }
 
   static bool classof(const InputFile *F) { return F->kind() == ImportKind; }
@@ -148,7 +165,7 @@ public:
   }
 
 private:
-  void readImport();
+  void readImports();
 
   MemoryBufferRef MBRef;
   std::vector<std::unique_ptr<SymbolBody>> SymbolBodies;

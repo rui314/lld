@@ -72,7 +72,7 @@ private:
   OutputSection *findSection(StringRef Name);
   OutputSection *createSection(StringRef Name);
 
-  uint32_t getTotalSectionSize(uint32_t Perm);
+  uint32_t getSizeOfInitializedData();
   std::map<StringRef, std::vector<DefinedImportData *>> binImports();
 
   SymbolTable *Symtab;
@@ -85,6 +85,7 @@ private:
   Chunk *ImportAddressTable = nullptr;
   uint32_t ImportAddressTableSize = 0;
 
+  Defined *Entry;
   uint64_t FileSize;
   uint64_t SizeOfImage;
 

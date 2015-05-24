@@ -19,8 +19,8 @@ namespace lld {
 namespace coff {
 
 SymbolTable::SymbolTable() {
-  addInitialSymbol(new DefinedAbsolute("__ImageBase", ImageBase));
-  addInitialSymbol(new Undefined("mainCRTStartup"));
+  addInitialSymbol(new DefinedAbsolute("__ImageBase", Config->ImageBase));
+  addInitialSymbol(new Undefined(Config->EntryName));
 }
 
 void SymbolTable::addInitialSymbol(SymbolBody *Body) {
@@ -100,6 +100,8 @@ bool SymbolTable::reportRemainingUndefines() {
 
 // This function resolves conflicts if there's an existing symbol with
 // the same name. Decisions are made based on symbol types.
+// (This function is designed to be easily parallelizable using
+// pointer compare-and-swap.)
 std::error_code SymbolTable::resolve(SymbolBody *New, Symbol **SymP) {
   StringRef Name = New->getName();
   auto *NewSym = new (Alloc) Symbol(nullptr);
@@ -130,6 +132,7 @@ std::error_code SymbolTable::resolve(SymbolBody *New, Symbol **SymP) {
   return std::error_code();
 }
 
+// Reads an archive member file pointed by a given symbol.
 std::error_code SymbolTable::addMemberFile(CanBeDefined *Body) {
   auto FileOrErr = Body->getMember();
   if (auto EC = FileOrErr.getError())
@@ -166,7 +169,7 @@ void SymbolTable::dump() {
     StringRef Name = P.first;
     Symbol *Ref = P.second;
     if (auto *Body = dyn_cast<Defined>(Ref->Body))
-      llvm::dbgs() << "0x" << Twine::utohexstr(ImageBase + Body->getRVA())
+      llvm::dbgs() << Twine::utohexstr(Config->ImageBase + Body->getRVA())
                    << " " << Body->getName() << "\n";
   }
 }
