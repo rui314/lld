@@ -41,20 +41,10 @@ std::error_code SymbolTable::addFile(std::unique_ptr<InputFile> File) {
 
 std::error_code SymbolTable::addObject(ObjectFile *File) {
   ObjectFiles.emplace_back(File);
-  for (SymbolBody *Body : File->getSymbols()) {
-    if (Body->isExternal()) {
-      // Only externally-visible symbols are subjects of symbol
-      // resolution.
+  for (SymbolBody *Body : File->getSymbols())
+    if (Body->isExternal())
       if (auto EC = resolve(Body))
         return EC;
-      continue;
-    }
-    // Create Symbols for all SymbolBodies so that referencing
-    // backrefs doesn't cause SEGV. Because Symbols created here are
-    // not shared, their forward pointers always points to the same
-    // SymbolBodies.
-    Body->setBackref(new (Alloc) Symbol(Body));
-  }
 
   // If an object file contains .drectve section, read it and add
   // files listed in the section.
@@ -97,7 +87,7 @@ bool SymbolTable::reportRemainingUndefines() {
       // fallback symbol. The StringBody object the Undefined has may
       // be stale, so get the latest result by following the back
       // pointer and then the forward poitner.
-      Sym->Body = Alias->getSymbol()->Body;
+      Sym->Body = Alias->getReplacement();
       if (!isa<Defined>(Sym->Body)) {
         llvm::errs() << "undefined symbol: " << Undef->getName() << "\n";
         Ret = true;

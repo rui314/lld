@@ -63,7 +63,7 @@ void SectionChunk::markLive() {
   // Mark all symbols listed in the relocation table for this section.
   for (const auto &I : getSectionRef().relocations()) {
     const coff_relocation *Rel = File->getCOFFObj()->getCOFFRelocation(I);
-    SymbolBody *B = File->getSymbol(Rel->SymbolTableIndex)->Body;
+    SymbolBody *B = File->getSymbolBody(Rel->SymbolTableIndex);
     if (auto *Def = dyn_cast<Defined>(B))
       Def->markLive();
   }
@@ -93,8 +93,8 @@ static void add64(uint8_t *P, int64_t V) { write64le(P, read64le(P) + V); }
 void SectionChunk::applyReloc(uint8_t *Buf, const coff_relocation *Rel) {
   using namespace llvm::COFF;
   uint8_t *Off = Buf + FileOff + Rel->VirtualAddress;
-  Symbol *Sym = File->getSymbol(Rel->SymbolTableIndex);
-  uint64_t S = cast<Defined>(Sym->Body)->getRVA();
+  SymbolBody *Body = File->getSymbolBody(Rel->SymbolTableIndex);
+  uint64_t S = cast<Defined>(Body)->getRVA();
   uint64_t P = RVA + Rel->VirtualAddress;
   switch (Rel->Type) {
   case IMAGE_REL_AMD64_ADDR32:   add32(Off, S + Config->ImageBase); break;

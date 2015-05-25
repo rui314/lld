@@ -99,9 +99,9 @@ public:
   std::vector<Chunk *> &getChunks() { return Chunks; }
   std::vector<SymbolBody *> &getSymbols() override { return SymbolBodies; }
 
-  // Returns a Symbol object for the SymbolIndex'th symbol in the
+  // Returns a SymbolBody object for the SymbolIndex'th symbol in the
   // underlying object file.
-  Symbol *getSymbol(uint32_t SymbolIndex);
+  SymbolBody *getSymbolBody(uint32_t SymbolIndex);
 
   // Returns .drectve section contents if exist.
   StringRef getDirectives() { return Directives; }

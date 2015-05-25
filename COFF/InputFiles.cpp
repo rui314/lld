@@ -113,8 +113,8 @@ std::error_code ObjectFile::parse() {
   return std::error_code();
 }
 
-Symbol *ObjectFile::getSymbol(uint32_t SymbolIndex) {
-  return SparseSymbolBodies[SymbolIndex]->getSymbol();
+SymbolBody *ObjectFile::getSymbolBody(uint32_t SymbolIndex) {
+  return SparseSymbolBodies[SymbolIndex]->getReplacement();
 }
 
 std::error_code ObjectFile::initializeChunks() {
