@@ -40,6 +40,10 @@ public:
   // Returns symbols defined by this file.
   virtual std::vector<std::unique_ptr<SymbolBody>> &getSymbols() = 0;
 
+  // Reads a file (constructors don't do that). Returns an error if a
+  // file is broken.
+  virtual std::error_code parse() { return std::error_code(); }
+
   // Returns a short, human-friendly filename. If this is a member of
   // an archive file, a returned value includes parent's filename.
   // Used for logging or debugging.
@@ -134,8 +138,8 @@ private:
   // This vector contains the same chunks as Chunks, but they are
   // indexed such that you can get a SectionChunk by section
   // index. Nonexistent section indices are filled with null pointers.
-  // (Because section 0 is reserved for undefined symbols, the first
-  // slot is always a null pointer.)
+  // (Because section number is 1-based, the first slot is always a
+  // null pointer.)
   std::vector<Chunk *> SparseChunks;
 
   // List of all symbols referenced or defined by this file.

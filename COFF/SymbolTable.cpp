@@ -29,6 +29,8 @@ void SymbolTable::addInitialSymbol(SymbolBody *Body) {
 }
 
 std::error_code SymbolTable::addFile(std::unique_ptr<InputFile> File) {
+  if (auto EC = File->parse())
+    return EC;
   InputFile *P = File.release();
   if (auto *F = dyn_cast<ObjectFile>(P))
     return addFile(F);
