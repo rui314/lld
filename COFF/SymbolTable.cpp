@@ -101,9 +101,7 @@ bool SymbolTable::reportRemainingUndefines() {
 }
 
 // This function resolves conflicts if there's an existing symbol with
-// the same name. Decisions are made based on symbol types.
-// (This function is designed to be parallelized easily using
-// pointer compare-and-swap.)
+// the same name. Decisions are made based on symbol type.
 std::error_code SymbolTable::resolve(SymbolBody *New, Symbol **SymP) {
   StringRef Name = New->getName();
   auto *NewSym = new (Alloc) Symbol(nullptr);
@@ -121,6 +119,8 @@ std::error_code SymbolTable::resolve(SymbolBody *New, Symbol **SymP) {
     return std::error_code();
   }
 
+  // compare() returns -1, 0, or 1 if the lhs symbol is less preferable,
+  // equivalent (conflicting), or more preferable, respectively.
   SymbolBody *Existing = Sym->Body;
   int comp = Existing->compare(New);
   if (comp < 0)
@@ -128,6 +128,9 @@ std::error_code SymbolTable::resolve(SymbolBody *New, Symbol **SymP) {
   if (comp == 0)
     return make_dynamic_error_code(Twine("duplicate symbol: ") + Name);
 
+  // If we have an Undefined symbol for a CanBeDefined symbol, we need to
+  // read an archive member to replace the CanBeDefined symbol with
+  // a Defined symbol.
   if (isa<Undefined>(Existing) || isa<Undefined>(New))
     if (auto *B = dyn_cast<CanBeDefined>(Sym->Body))
       return addMemberFile(B);
