@@ -59,7 +59,7 @@ private:
   std::error_code addArchive(ArchiveFile *File);
   std::error_code addImport(ImportFile *File);
 
-  std::error_code resolve(SymbolBody *Body, Symbol **Ref);
+  std::error_code resolve(SymbolBody *Body);
   std::error_code addMemberFile(CanBeDefined *Body);
   void addInitialSymbol(SymbolBody *Body);
 

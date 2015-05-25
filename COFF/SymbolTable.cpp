@@ -45,17 +45,15 @@ std::error_code SymbolTable::addObject(ObjectFile *File) {
     if (Body->isExternal()) {
       // Only externally-visible symbols are subjects of symbol
       // resolution.
-      Symbol *Sym;
-      if (auto EC = resolve(Body, &Sym))
+      if (auto EC = resolve(Body))
         return EC;
-      Body->setBackref(Sym);
-    } else {
-      // Create Symbols for all SymbolBodies so that referencing
-      // backrefs doesn't cause SEGV. Because Symbols created here are
-      // not shared, their forward pointers always points to the same
-      // SymbolBodies.
-      Body->setBackref(new (Alloc) Symbol(Body));
+      continue;
     }
+    // Create Symbols for all SymbolBodies so that referencing
+    // backrefs doesn't cause SEGV. Because Symbols created here are
+    // not shared, their forward pointers always points to the same
+    // SymbolBodies.
+    Body->setBackref(new (Alloc) Symbol(Body));
   }
 
   // If an object file contains .drectve section, read it and add
@@ -74,7 +72,7 @@ std::error_code SymbolTable::addObject(ObjectFile *File) {
 std::error_code SymbolTable::addArchive(ArchiveFile *File) {
   ArchiveFiles.emplace_back(File);
   for (SymbolBody *Body : File->getSymbols())
-    if (auto EC = resolve(Body, nullptr))
+    if (auto EC = resolve(Body))
       return EC;
   return std::error_code();
 }
@@ -82,7 +80,7 @@ std::error_code SymbolTable::addArchive(ArchiveFile *File) {
 std::error_code SymbolTable::addImport(ImportFile *File) {
   ImportFiles.emplace_back(File);
   for (SymbolBody *Body : File->getSymbols())
-    if (auto EC = resolve(Body, nullptr))
+    if (auto EC = resolve(Body))
       return EC;
   return std::error_code();
 }
@@ -114,27 +112,21 @@ bool SymbolTable::reportRemainingUndefines() {
 
 // This function resolves conflicts if there's an existing symbol with
 // the same name. Decisions are made based on symbol type.
-std::error_code SymbolTable::resolve(SymbolBody *New, Symbol **SymP) {
+std::error_code SymbolTable::resolve(SymbolBody *New) {
+  // Find an existing Symbol or create and insert a new one.
   StringRef Name = New->getName();
-  Symbol *Sym;
   auto It = Symtab.find(Name);
-  if (It != Symtab.end()) {
-    Sym = It->second;
-  } else {
+  if (It == Symtab.end()) {
     auto *NewSym = new (Alloc) Symbol(New);
-    auto It2 = Symtab.insert(It, std::make_pair(Name, NewSym));
-    if (It2->second == NewSym) {
-      if (SymP)
-        *SymP = NewSym;
+    It = Symtab.insert(It, std::make_pair(Name, NewSym));
+    // If this key is new, no need to resolve.
+    if (It->second == NewSym) {
+      New->setBackref(NewSym);
       return std::error_code();
     }
-    Sym = It2->second;
   }
-
-  // SymP is not significant in this function. It's here to reduce the
-  // number of hash table lookups in the caller.
-  if (SymP)
-    *SymP = Sym;
+  Symbol *Sym = It->second;
+  New->setBackref(Sym);
 
   // compare() returns -1, 0, or 1 if the lhs symbol is less preferable,
   // equivalent (conflicting), or more preferable, respectively.
@@ -143,8 +135,7 @@ std::error_code SymbolTable::resolve(SymbolBody *New, Symbol **SymP) {
   if (comp < 0)
     Sym->Body = New;
   if (comp == 0)
-    return make_dynamic_error_code(Twine("duplicate symbol: ") +
-                                   New->getName());
+    return make_dynamic_error_code(Twine("duplicate symbol: ") + Name);
 
   // If we have an Undefined symbol for a CanBeDefined symbol, we need
   // to read an archive member to replace the CanBeDefined symbol with
