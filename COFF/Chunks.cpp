@@ -162,7 +162,7 @@ StringChunk::StringChunk(StringRef S) : Data(S.size() + 1) {
 
 void ImportFuncChunk::applyRelocations(uint8_t *Buf) {
   uint32_t Operand = ImpSymbol->getRVA() - RVA - getSize();
-  // The first two bytes are a JMP instruction. Fill it's operand.
+  // The first two bytes are a JMP instruction. Fill its operand.
   write32le(Buf + FileOff + 2, Operand);
 }
 

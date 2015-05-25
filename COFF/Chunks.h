@@ -79,6 +79,11 @@ public:
   // only section chunks are subject of garbage collection.
   virtual void printDiscardMessage() { llvm_unreachable("internal error"); }
 
+  // Returns true if this is a COMDAT section. Usually, it is an error
+  // if there are more than one defined symbols having the same name,
+  // but symbols at begining of COMDAT sections allowed to duplicate.
+  virtual bool isCOMDAT() const { return false; }
+
   // Used by the garbage collector.
   virtual bool isRoot() { return false; }
   virtual bool isLive() { return true; }
@@ -116,7 +121,7 @@ public:
   uint32_t getPermissions() const override;
   StringRef getSectionName() const override { return SectionName; }
   void printDiscardMessage() override;
-  bool isCOMDAT() const;
+  bool isCOMDAT() const override;
 
   bool isRoot() override;
   void markLive() override;

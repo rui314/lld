@@ -122,11 +122,7 @@ public:
   bool isExternal() override { return Sym.isExternal(); }
   void markLive() override { Data->markLive(); }
   uint64_t getFileOff() override { return Data->getFileOff() + Sym.getValue(); }
-
-  // Returns true if this is a COMDAT symbol. Usually, it is an error
-  // if there are more than one defined symbols having the same name,
-  // but COMDAT symbols are allowed to be duplicated.
-  bool isCOMDAT() const { return cast<SectionChunk>(Data)->isCOMDAT(); }
+  bool isCOMDAT() const { return Data->isCOMDAT(); }
 
   // Returns true if this is a common symbol.
   bool isCommon() const { return Sym.isCommon(); }
