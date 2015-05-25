@@ -112,24 +112,24 @@ public:
 class DefinedRegular : public Defined {
 public:
   DefinedRegular(ObjectFile *F, StringRef Name, COFFSymbolRef S, Chunk *C)
-      : Defined(DefinedRegularKind, Name), File(F), Sym(S), Section(C) {}
+      : Defined(DefinedRegularKind, Name), File(F), Sym(S), Data(C) {}
 
   static bool classof(const SymbolBody *S) {
     return S->kind() == DefinedRegularKind;
   }
 
-  uint64_t getRVA() override { return Section->getRVA() + Sym.getValue(); }
+  uint64_t getRVA() override { return Data->getRVA() + Sym.getValue(); }
   bool isExternal() override { return Sym.isExternal(); }
-  void markLive() override { Section->markLive(); }
+  void markLive() override { Data->markLive(); }
 
   uint64_t getFileOff() override {
-    return Section->getFileOff() + Sym.getValue();
+    return Data->getFileOff() + Sym.getValue();
   }
 
   // Returns true if this is a COMDAT symbol. Usually, it is an error
   // if there are more than one defined symbols having the same name,
   // but COMDAT symbols are allowed to be duplicated.
-  bool isCOMDAT() const { return Section->isCOMDAT(); }
+  bool isCOMDAT() const { return cast<SectionChunk>(Data)->isCOMDAT(); }
 
   // Returns true if this is a common symbol.
   bool isCommon() const { return Sym.isCommon(); }
@@ -138,7 +138,7 @@ public:
 private:
   ObjectFile *File;
   COFFSymbolRef Sym;
-  Chunk *Section;
+  Chunk *Data;
 };
 
 // Absolute symbols.

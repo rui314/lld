@@ -64,8 +64,6 @@ public:
   // by this chunk is filled with zeros.
   virtual bool hasData() const { return true; }
 
-  virtual bool isCOMDAT() const { return false; }
-
   // Returns readable/writable/executable bits.
   virtual uint32_t getPermissions() const { return 0; }
 
@@ -115,10 +113,10 @@ public:
   size_t getSize() const override { return Header->SizeOfRawData; }
   void applyRelocations(uint8_t *Buffer) override;
   bool hasData() const override;
-  bool isCOMDAT() const override;
   uint32_t getPermissions() const override;
   StringRef getSectionName() const override { return SectionName; }
   void printDiscardMessage() override;
+  bool isCOMDAT() const;
 
   bool isRoot() override;
   void markLive() override;
