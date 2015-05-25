@@ -177,29 +177,6 @@ private:
   Chunk *Location = nullptr;
 };
 
-// This class represents a symbol for a jump table entry which jumps
-// to a function in a DLL. Linker are supposed to create such symbols
-// without "__imp_" prefix for all function symbols exported from
-// DLLs, so that you can call DLL functions as regular functions with
-// a regular name. A function pointer is given as a DefinedImportData.
-class DefinedImportFunc : public Defined {
-public:
-  DefinedImportFunc(StringRef Name, DefinedImportData *S)
-      : Defined(DefinedImportFuncKind, Name), Data(S) {}
-
-  static bool classof(const SymbolBody *S) {
-    return S->kind() == DefinedImportFuncKind;
-  }
-
-  uint64_t getRVA() override { return Data.getRVA(); }
-  uint64_t getFileOff() override { return Data.getFileOff(); }
-  Chunk *getChunk() { return &Data; }
-
-private:
-  DefinedImportData *ImpSymbol;
-  ImportFuncChunk Data;
-};
-
 // This class represents a symbol defined in an archive file. It is
 // created from an archive file header, and it knows how to load an
 // object file from an archive to replace itself with a defined
@@ -245,6 +222,31 @@ public:
 
 private:
   SymbolBody **Alias;
+};
+
+// Windows-specific classes.
+
+// This class represents a symbol for a jump table entry which jumps
+// to a function in a DLL. Linker are supposed to create such symbols
+// without "__imp_" prefix for all function symbols exported from
+// DLLs, so that you can call DLL functions as regular functions with
+// a regular name. A function pointer is given as a DefinedImportData.
+class DefinedImportFunc : public Defined {
+public:
+  DefinedImportFunc(StringRef Name, DefinedImportData *S)
+      : Defined(DefinedImportFuncKind, Name), Data(S) {}
+
+  static bool classof(const SymbolBody *S) {
+    return S->kind() == DefinedImportFuncKind;
+  }
+
+  uint64_t getRVA() override { return Data.getRVA(); }
+  uint64_t getFileOff() override { return Data.getFileOff(); }
+  Chunk *getChunk() { return &Data; }
+
+private:
+  DefinedImportData *ImpSymbol;
+  ImportFuncChunk Data;
 };
 
 } // namespace coff

@@ -50,6 +50,10 @@ std::error_code SymbolTable::addObject(ObjectFile *File) {
         return EC;
       Body->setBackref(Sym);
     } else {
+      // Create Symbols for all SymbolBodies so that referencing
+      // backrefs doesn't cause SEGV. Because Symbols created here are
+      // not shared, their forward pointers always points to the same
+      // SymbolBodies.
       Body->setBackref(new (Alloc) Symbol(Body));
     }
   }
@@ -61,8 +65,8 @@ std::error_code SymbolTable::addObject(ObjectFile *File) {
     std::vector<std::unique_ptr<InputFile>> Libs;
     if (auto EC = parseDirectives(Dir, &Libs, &StringAlloc))
       return EC;
-    for (std::unique_ptr<InputFile> &L : Libs)
-      addFile(std::move(L));
+    for (std::unique_ptr<InputFile> &Lib : Libs)
+      addFile(std::move(Lib));
   }
   return std::error_code();
 }
@@ -84,20 +88,28 @@ std::error_code SymbolTable::addImport(ImportFile *File) {
 }
 
 bool SymbolTable::reportRemainingUndefines() {
+  bool Ret = false;
   for (auto &I : Symtab) {
     Symbol *Sym = I.second;
-    if (auto *Undef = dyn_cast<Undefined>(Sym->Body)) {
-      if (SymbolBody *Alias = Undef->getWeakAlias()) {
-        // The StringBody object may be stale. Get the latest result
-        // by following the back pointer and then the forward poitner.
-        Sym->Body = Alias->getSymbol()->Body;
-        continue;
+    auto *Undef = dyn_cast<Undefined>(Sym->Body);
+    if (!Undef)
+      continue;
+    if (SymbolBody *Alias = Undef->getWeakAlias()) {
+      // If an Undefined has a fallback, it'll be replaced with the
+      // fallback symbol. The StringBody object the Undefined has may
+      // be stale, so get the latest result by following the back
+      // pointer and then the forward poitner.
+      Sym->Body = Alias->getSymbol()->Body;
+      if (!isa<Defined>(Sym->Body)) {
+        llvm::errs() << "undefined symbol: " << Undef->getName() << "\n";
+        Ret = true;
       }
-      llvm::errs() << "undefined symbol: " << Sym->Body->getName() << "\n";
-      return true;
+      continue;
     }
+    llvm::errs() << "undefined symbol: " << Undef->getName() << "\n";
+    Ret = true;
   }
-  return false;
+  return Ret;
 }
 
 // This function resolves conflicts if there's an existing symbol with
