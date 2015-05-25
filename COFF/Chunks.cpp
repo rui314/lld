@@ -153,6 +153,11 @@ uint32_t CommonChunk::getPermissions() const {
          IMAGE_SCN_MEM_WRITE;
 }
 
+StringChunk::StringChunk(StringRef S) : Data(S.size() + 1) {
+  memcpy(Data.data(), S.data(), S.size());
+  Data[S.size()] = 0;
+}
+
 void ImportFuncChunk::applyRelocations(uint8_t *Buffer) {
   uint32_t Operand = ImpSymbol->getRVA() - RVA - getSize();
   // The first two bytes are a JMP instruction. Fill it's operand.

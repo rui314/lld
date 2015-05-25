@@ -156,17 +156,17 @@ private:
 // A chunk for linker-created strings.
 class StringChunk : public Chunk {
 public:
-  explicit StringChunk(StringRef S) : Data(S.size() + 1) {
-    memcpy(Data.data(), S.data(), S.size());
-    Data[S.size()] = 0;
-  }
-
+  explicit StringChunk(StringRef S);
   const uint8_t *getData() const override { return &Data[0]; }
   size_t getSize() const override { return Data.size(); }
 
 private:
   std::vector<uint8_t> Data;
 };
+
+// All chunks below are for the DLL import descriptor table and
+// Windows-specific. You may need to read the Microsoft PE/COFF spec
+// to understand details about the data structures.
 
 static const uint8_t ImportFuncData[] = {
     0xff, 0x25, 0x00, 0x00, 0x00, 0x00, // JMP *0x0
@@ -191,7 +191,6 @@ public:
   explicit HintNameChunk(StringRef Name);
   const uint8_t *getData() const override { return Data.data(); }
   size_t getSize() const override { return Data.size(); }
-  void applyRelocations(uint8_t *Buffer) override {}
 
 private:
   std::vector<uint8_t> Data;
@@ -226,7 +225,6 @@ public:
   explicit NullChunk(size_t N) : Size(N) {}
   bool hasData() const override { return false; }
   size_t getSize() const override { return Size; }
-  void applyRelocations(uint8_t *Buffer) override {}
 
 private:
   size_t Size;
