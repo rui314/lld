@@ -116,20 +116,25 @@ bool SymbolTable::reportRemainingUndefines() {
 // the same name. Decisions are made based on symbol type.
 std::error_code SymbolTable::resolve(SymbolBody *New, Symbol **SymP) {
   StringRef Name = New->getName();
-  auto *NewSym = new (Alloc) Symbol(nullptr);
-  auto Res = Symtab.insert(std::make_pair(Name, NewSym));
-  Symbol *Sym = Res.second ? NewSym : Res.first->second;
+  Symbol *Sym;
+  auto It = Symtab.find(Name);
+  if (It != Symtab.end()) {
+    Sym = It->second;
+  } else {
+    auto *NewSym = new (Alloc) Symbol(New);
+    auto It2 = Symtab.insert(It, std::make_pair(Name, NewSym));
+    if (It2->second == NewSym) {
+      if (SymP)
+        *SymP = NewSym;
+      return std::error_code();
+    }
+    Sym = It2->second;
+  }
 
   // SymP is not significant in this function. It's here to reduce the
   // number of hash table lookups in the caller.
   if (SymP)
     *SymP = Sym;
-
-  // If nothing exists yet, just add a new one.
-  if (Sym->Body == nullptr) {
-    Sym->Body = New;
-    return std::error_code();
-  }
 
   // compare() returns -1, 0, or 1 if the lhs symbol is less preferable,
   // equivalent (conflicting), or more preferable, respectively.
@@ -138,7 +143,8 @@ std::error_code SymbolTable::resolve(SymbolBody *New, Symbol **SymP) {
   if (comp < 0)
     Sym->Body = New;
   if (comp == 0)
-    return make_dynamic_error_code(Twine("duplicate symbol: ") + Name);
+    return make_dynamic_error_code(Twine("duplicate symbol: ") +
+                                   New->getName());
 
   // If we have an Undefined symbol for a CanBeDefined symbol, we need
   // to read an archive member to replace the CanBeDefined symbol with
