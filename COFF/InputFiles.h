@@ -63,9 +63,9 @@ private:
 // .lib or .a file.
 class ArchiveFile : public InputFile {
 public:
+  explicit ArchiveFile(StringRef S) : InputFile(ArchiveKind), Name(S) {}
   static bool classof(const InputFile *F) { return F->kind() == ArchiveKind; }
-  static ErrorOr<std::unique_ptr<ArchiveFile>> create(StringRef Path);
-
+  std::error_code parse() override;
   StringRef getName() override { return Name; }
 
   // Returns a memory buffer for a given symbol. An empty memory
@@ -80,9 +80,6 @@ public:
   }
 
 private:
-  ArchiveFile(StringRef Name, std::unique_ptr<Archive> File,
-              std::unique_ptr<MemoryBuffer> Mem);
-
   std::unique_ptr<Archive> File;
   std::string Name;
   std::unique_ptr<MemoryBuffer> MB;
@@ -93,12 +90,13 @@ private:
 // .obj or .o file. This may be a member of an archive file.
 class ObjectFile : public InputFile {
 public:
+  explicit ObjectFile(StringRef S) : InputFile(ObjectKind), Name(S) {}
+  ObjectFile(StringRef S, MemoryBufferRef M)
+      : InputFile(ObjectKind), Name(S), MBRef(M) {}
+
   static bool classof(const InputFile *F) { return F->kind() == ObjectKind; }
 
-  static ErrorOr<std::unique_ptr<ObjectFile>> create(StringRef Path);
-  static ErrorOr<std::unique_ptr<ObjectFile>> create(StringRef Path,
-                                                     MemoryBufferRef MB);
-
+  std::error_code parse() override;
   StringRef getName() override { return Name; }
 
   // Returns a Symbol object for the SymbolIndex'th symbol in the
@@ -118,9 +116,8 @@ public:
   }
 
 private:
-  ObjectFile(StringRef Name, std::unique_ptr<COFFObjectFile> File);
-  void initializeChunks();
-  void initializeSymbols();
+  std::error_code initializeChunks();
+  std::error_code initializeSymbols();
 
   SymbolBody *createSymbolBody(StringRef Name, COFFSymbolRef Sym,
                                const void *Aux, bool IsFirst);
@@ -128,6 +125,7 @@ private:
   std::string Name;
   std::unique_ptr<COFFObjectFile> COFFObj;
   std::unique_ptr<MemoryBuffer> MB;
+  MemoryBufferRef MBRef;
   StringRef Directives;
 
   // List of all chunks defined by this file. The first chunks

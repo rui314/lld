@@ -165,10 +165,10 @@ std::string findFile(StringRef Filename) {
   return Filename;
 }
 
-ErrorOr<std::unique_ptr<InputFile>> createFile(StringRef Path) {
+std::unique_ptr<InputFile> createFile(StringRef Path) {
   if (StringRef(Path).endswith_lower(".lib"))
-    return ArchiveFile::create(Path);
-  return ObjectFile::create(Path);
+    return llvm::make_unique<ArchiveFile>(Path);
+  return llvm::make_unique<ObjectFile>(Path);
 }
 
 // Parses .drectve section contents and returns a list of files
@@ -193,10 +193,7 @@ std::error_code parseDirectives(StringRef S,
     std::string Path = findLib(Arg->getValue());
     if (!Config->insertFile(Path))
       continue;
-    ErrorOr<std::unique_ptr<InputFile>> FileOrErr = ArchiveFile::create(Path);
-    if (auto EC = FileOrErr.getError())
-      return EC;
-    Res->push_back(std::move(FileOrErr.get()));
+    Res->push_back(llvm::make_unique<ArchiveFile>(Path));
   }
   return std::error_code();
 }
@@ -221,13 +218,7 @@ bool link(int Argc, const char *Argv[]) {
     std::string Path = findFile(Arg->getValue());
     if (!Config->insertFile(Path))
       continue;
-
-    ErrorOr<std::unique_ptr<InputFile>> FileOrErr = createFile(Path);
-    if (auto EC = FileOrErr.getError()) {
-      llvm::errs() << "Cannot open " << Path << ": " << EC.message() << "\n";
-      return false;
-    }
-    if (auto EC = Symtab.addFile(std::move(FileOrErr.get()))) {
+    if (auto EC = Symtab.addFile(createFile(Path))) {
       llvm::errs() << Path << ": " << EC.message() << "\n";
       return false;
     }
