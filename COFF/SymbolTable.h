@@ -55,9 +55,9 @@ public:
   std::vector<std::unique_ptr<ImportFile>> ImportFiles;
 
 private:
-  std::error_code addFile(ObjectFile *File);
-  std::error_code addFile(ArchiveFile *File);
-  std::error_code addFile(ImportFile *File);
+  std::error_code addObject(ObjectFile *File);
+  std::error_code addArchive(ArchiveFile *File);
+  std::error_code addImport(ImportFile *File);
 
   std::error_code resolve(SymbolBody *Body, Symbol **Ref);
   std::error_code addMemberFile(CanBeDefined *Body);

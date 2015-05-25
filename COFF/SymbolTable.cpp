@@ -31,17 +31,15 @@ void SymbolTable::addInitialSymbol(SymbolBody *Body) {
 std::error_code SymbolTable::addFile(std::unique_ptr<InputFile> File) {
   if (auto EC = File->parse())
     return EC;
-  InputFile *P = File.release();
-  if (auto *F = dyn_cast<ObjectFile>(P))
-    return addFile(F);
-  if (auto *F = dyn_cast<ArchiveFile>(P))
-    return addFile(F);
-  if (auto *F = dyn_cast<ImportFile>(P))
-    return addFile(F);
-  llvm_unreachable("unknown file type");
+  InputFile *FileP = File.release();
+  if (auto *P = dyn_cast<ObjectFile>(FileP))
+    return addObject(P);
+  if (auto *P = dyn_cast<ArchiveFile>(FileP))
+    return addArchive(P);
+  return addImport(cast<ImportFile>(FileP));
 }
 
-std::error_code SymbolTable::addFile(ObjectFile *File) {
+std::error_code SymbolTable::addObject(ObjectFile *File) {
   ObjectFiles.emplace_back(File);
   for (SymbolBody *Body : File->getSymbols()) {
     if (Body->isExternal()) {
@@ -69,7 +67,7 @@ std::error_code SymbolTable::addFile(ObjectFile *File) {
   return std::error_code();
 }
 
-std::error_code SymbolTable::addFile(ArchiveFile *File) {
+std::error_code SymbolTable::addArchive(ArchiveFile *File) {
   ArchiveFiles.emplace_back(File);
   for (SymbolBody *Body : File->getSymbols())
     if (auto EC = resolve(Body, nullptr))
@@ -77,7 +75,7 @@ std::error_code SymbolTable::addFile(ArchiveFile *File) {
   return std::error_code();
 }
 
-std::error_code SymbolTable::addFile(ImportFile *File) {
+std::error_code SymbolTable::addImport(ImportFile *File) {
   ImportFiles.emplace_back(File);
   for (SymbolBody *Body : File->getSymbols())
     if (auto EC = resolve(Body, nullptr))
