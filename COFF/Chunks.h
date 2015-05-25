@@ -59,7 +59,11 @@ public:
   // calling this function.
   virtual void applyRelocations(uint8_t *Buffer) {}
 
+  // Returns true if getData() returns a valid pointer to data.
+  // BSS chunks return false. If false is returned, the space occupied
+  // by this chunk is filled with zeros.
   virtual bool hasData() const { return true; }
+
   virtual bool isCOMDAT() const { return false; }
 
   // Returns readable/writable/executable bits.

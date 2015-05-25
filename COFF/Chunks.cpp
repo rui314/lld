@@ -41,6 +41,7 @@ const uint8_t *SectionChunk::getData() const {
   return Data.data();
 }
 
+// Returns true if this chunk should be considered as a GC root.
 bool SectionChunk::isRoot() {
   if (isCOMDAT())
     return false;
@@ -88,11 +89,12 @@ static void add16(uint8_t *P, int32_t V) { write16le(P, read16le(P) + V); }
 static void add32(uint8_t *P, int32_t V) { write32le(P, read32le(P) + V); }
 static void add64(uint8_t *P, int64_t V) { write64le(P, read64le(P) + V); }
 
+// Implements x64 PE/COFF relocations.
 void SectionChunk::applyReloc(uint8_t *Buffer, const coff_relocation *Rel) {
   using namespace llvm::COFF;
   uint8_t *Off = Buffer + FileOff + Rel->VirtualAddress;
-  auto *Body = cast<Defined>(File->getSymbol(Rel->SymbolTableIndex)->Body);
-  uint64_t S = Body->getRVA();
+  Symbol *Sym = File->getSymbol(Rel->SymbolTableIndex);
+  uint64_t S = cast<Defined>(Sym->Body)->getRVA();
   uint64_t P = RVA + Rel->VirtualAddress;
   switch (Rel->Type) {
   case IMAGE_REL_AMD64_ADDR32:   add32(Off, S + Config->ImageBase); break;
@@ -123,7 +125,7 @@ bool SectionChunk::isCOMDAT() const {
   return Header->Characteristics & llvm::COFF::IMAGE_SCN_LNK_COMDAT;
 }
 
-// Prints "Discarded <symbolname>" for all external function symbols.
+// Prints "Discarded <symbol>" for all external function symbols.
 void SectionChunk::printDiscardMessage() {
   uint32_t E = File->getCOFFObj()->getNumberOfSymbols();
   for (uint32_t I = 0; I < E; ++I) {
