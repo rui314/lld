@@ -156,9 +156,10 @@ std::error_code SymbolTable::addMemberFile(CanBeDefined *Body) {
 
 std::vector<Chunk *> SymbolTable::getChunks() {
   std::vector<Chunk *> Res;
-  for (std::unique_ptr<ObjectFile> &File : ObjectFiles)
-    for (Chunk *C : File->getChunks())
-      Res.push_back(C);
+  for (std::unique_ptr<ObjectFile> &File : ObjectFiles) {
+    std::vector<Chunk *> &V = File->getChunks();
+    Res.insert(Res.end(), V.begin(), V.end());
+  }
   return Res;
 }
 

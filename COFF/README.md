@@ -83,7 +83,7 @@ The linking process is drived by the driver. The driver
 Performance
 -----------
 
-Currently it's able to self-host on the Windows platform. It takes 1.5
+Currently it's able to self-host on the Windows platform. It takes 1.3
 seconds to self-host on my Xeon 2580 machine, while the existing
 Atom-based linker takes 5 seconds to self-host. We believe the
 performance difference comes from simplification and optimizations we
