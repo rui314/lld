@@ -66,16 +66,18 @@ std::error_code ArchiveFile::parse() {
   return std::error_code();
 }
 
+// Returns a buffer pointing to a member file containing a given symbol.
 ErrorOr<MemoryBufferRef> ArchiveFile::getMember(const Archive::Symbol *Sym) {
   auto ItOrErr = Sym->getMember();
   if (auto EC = ItOrErr.getError())
     return EC;
   Archive::child_iterator It = ItOrErr.get();
 
+  // Return an empty buffer if we have already returned the same buffer.
   const char *StartAddr = It->getBuffer().data();
-  if (Seen.count(StartAddr))
+  auto Pair = Seen.insert(StartAddr);
+  if (!Pair.second)
     return MemoryBufferRef();
-  Seen.insert(StartAddr);
 
   auto MBRefOrErr = It->getMemoryBufferRef();
   if (auto EC = MBRefOrErr.getError())
@@ -117,7 +119,7 @@ Symbol *ObjectFile::getSymbol(uint32_t SymbolIndex) {
 
 std::error_code ObjectFile::initializeChunks() {
   uint32_t NumSections = COFFObj->getNumberOfSections();
-  Chunks.reserve(NumSections + 1);
+  Chunks.reserve(NumSections);
   SparseChunks.resize(NumSections + 1);
   for (uint32_t I = 1; I < NumSections + 1; ++I) {
     const coff_section *Sec;
@@ -213,7 +215,7 @@ SymbolBody *ObjectFile::createSymbolBody(StringRef Name, COFFSymbolRef Sym,
   return nullptr;
 }
 
-void ImportFile::readImports() {
+std::error_code ImportFile::parse() {
   const char *Buf = MBRef.getBufferStart();
   const char *End = MBRef.getBufferEnd();
 
@@ -221,10 +223,8 @@ void ImportFile::readImports() {
   uint32_t DataSize = read32le(Buf + offsetof(ImportHeader, SizeOfData));
 
   // Check if the total size is valid.
-  if (size_t(End - Buf) != sizeof(ImportHeader) + DataSize) {
-    llvm::errs() << "broken import library";
-    return;
-  }
+  if (size_t(End - Buf) != sizeof(ImportHeader) + DataSize)
+    return make_dynamic_error_code("broken import library");
 
   StringRef Name = StringAlloc.save(StringRef(Buf + sizeof(ImportHeader)));
   StringRef ImpName = StringAlloc.save(Twine("__imp_") + Name);
@@ -236,6 +236,7 @@ void ImportFile::readImports() {
   int Type = TypeInfo & 0x3;
   if (Type == llvm::COFF::IMPORT_CODE)
     SymbolBodies.push_back(new (Alloc) DefinedImportFunc(Name, ImpSym));
+  return std::error_code();
 }
 }
 }

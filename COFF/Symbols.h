@@ -121,10 +121,7 @@ public:
   uint64_t getRVA() override { return Data->getRVA() + Sym.getValue(); }
   bool isExternal() override { return Sym.isExternal(); }
   void markLive() override { Data->markLive(); }
-
-  uint64_t getFileOff() override {
-    return Data->getFileOff() + Sym.getValue();
-  }
+  uint64_t getFileOff() override { return Data->getFileOff() + Sym.getValue(); }
 
   // Returns true if this is a COMDAT symbol. Usually, it is an error
   // if there are more than one defined symbols having the same name,

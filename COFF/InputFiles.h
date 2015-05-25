@@ -42,7 +42,7 @@ public:
 
   // Reads a file (constructors don't do that). Returns an error if a
   // file is broken.
-  virtual std::error_code parse() { return std::error_code(); }
+  virtual std::error_code parse() = 0;
 
   // Returns a short, human-friendly filename. If this is a member of
   // an archive file, a returned value includes parent's filename.
@@ -53,7 +53,7 @@ public:
   void setParentName(StringRef N) { ParentName = N; }
 
 protected:
-  InputFile(Kind K) : FileKind(K) {}
+  explicit InputFile(Kind K) : FileKind(K) {}
 
 private:
   const Kind FileKind;
@@ -150,16 +150,13 @@ private:
 // for details about the format.
 class ImportFile : public InputFile {
 public:
-  explicit ImportFile(MemoryBufferRef M) : InputFile(ImportKind), MBRef(M) {
-    readImports();
-  }
-
+  explicit ImportFile(MemoryBufferRef M) : InputFile(ImportKind), MBRef(M) {}
   static bool classof(const InputFile *F) { return F->kind() == ImportKind; }
   StringRef getName() override { return MBRef.getBufferIdentifier(); }
   std::vector<SymbolBody *> &getSymbols() override { return SymbolBodies; }
 
 private:
-  void readImports();
+  std::error_code parse() override;
 
   MemoryBufferRef MBRef;
   std::vector<SymbolBody *> SymbolBodies;

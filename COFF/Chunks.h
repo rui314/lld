@@ -57,7 +57,7 @@ public:
   // mmap'ed output file. Because this function uses file offsets and
   // RVA values of other chunks, you need to set them properly before
   // calling this function.
-  virtual void applyRelocations(uint8_t *Buffer) {}
+  virtual void applyRelocations(uint8_t *Buf) {}
 
   // Returns true if getData() returns a valid pointer to data.
   // BSS chunks return false. If false is returned, the space occupied
@@ -111,7 +111,7 @@ public:
                uint32_t SectionIndex);
   const uint8_t *getData() const override;
   size_t getSize() const override { return Header->SizeOfRawData; }
-  void applyRelocations(uint8_t *Buffer) override;
+  void applyRelocations(uint8_t *Buf) override;
   bool hasData() const override;
   uint32_t getPermissions() const override;
   StringRef getSectionName() const override { return SectionName; }
@@ -128,7 +128,7 @@ public:
 
 private:
   SectionRef getSectionRef();
-  void applyReloc(uint8_t *Buffer, const coff_relocation *Rel);
+  void applyReloc(uint8_t *Buf, const coff_relocation *Rel);
 
   // A file this chunk was created from.
   ObjectFile *File;
@@ -181,7 +181,7 @@ public:
   explicit ImportFuncChunk(Defined *S) : ImpSymbol(S) {}
   const uint8_t *getData() const override { return ImportFuncData; }
   size_t getSize() const override { return sizeof(ImportFuncData); }
-  void applyRelocations(uint8_t *Buffer) override;
+  void applyRelocations(uint8_t *Buf) override;
 
 private:
   Defined *ImpSymbol;
@@ -204,7 +204,7 @@ public:
   explicit LookupChunk(HintNameChunk *H) : HintName(H) {}
   bool hasData() const override { return false; }
   size_t getSize() const override { return 8; }
-  void applyRelocations(uint8_t *Buffer) override;
+  void applyRelocations(uint8_t *Buf) override;
   HintNameChunk *HintName;
 };
 
@@ -214,7 +214,7 @@ public:
   explicit DirectoryChunk(StringChunk *N) : DLLName(N) {}
   bool hasData() const override { return false; }
   size_t getSize() const override { return sizeof(ImportDirectoryTableEntry); }
-  void applyRelocations(uint8_t *Buffer) override;
+  void applyRelocations(uint8_t *Buf) override;
 
   StringChunk *DLLName;
   LookupChunk *LookupTab;

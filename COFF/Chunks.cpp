@@ -78,10 +78,10 @@ void SectionChunk::addAssociative(SectionChunk *Child) {
   AssocChildren.push_back(Child);
 }
 
-void SectionChunk::applyRelocations(uint8_t *Buffer) {
+void SectionChunk::applyRelocations(uint8_t *Buf) {
   for (const auto &I : getSectionRef().relocations()) {
     const coff_relocation *Rel = File->getCOFFObj()->getCOFFRelocation(I);
-    applyReloc(Buffer, Rel);
+    applyReloc(Buf, Rel);
   }
 }
 
@@ -90,9 +90,9 @@ static void add32(uint8_t *P, int32_t V) { write32le(P, read32le(P) + V); }
 static void add64(uint8_t *P, int64_t V) { write64le(P, read64le(P) + V); }
 
 // Implements x64 PE/COFF relocations.
-void SectionChunk::applyReloc(uint8_t *Buffer, const coff_relocation *Rel) {
+void SectionChunk::applyReloc(uint8_t *Buf, const coff_relocation *Rel) {
   using namespace llvm::COFF;
-  uint8_t *Off = Buffer + FileOff + Rel->VirtualAddress;
+  uint8_t *Off = Buf + FileOff + Rel->VirtualAddress;
   Symbol *Sym = File->getSymbol(Rel->SymbolTableIndex);
   uint64_t S = cast<Defined>(Sym->Body)->getRVA();
   uint64_t P = RVA + Rel->VirtualAddress;
@@ -160,10 +160,10 @@ StringChunk::StringChunk(StringRef S) : Data(S.size() + 1) {
   Data[S.size()] = 0;
 }
 
-void ImportFuncChunk::applyRelocations(uint8_t *Buffer) {
+void ImportFuncChunk::applyRelocations(uint8_t *Buf) {
   uint32_t Operand = ImpSymbol->getRVA() - RVA - getSize();
   // The first two bytes are a JMP instruction. Fill it's operand.
-  write32le(Buffer + FileOff + 2, Operand);
+  write32le(Buf + FileOff + 2, Operand);
 }
 
 HintNameChunk::HintNameChunk(StringRef Name)
@@ -171,12 +171,12 @@ HintNameChunk::HintNameChunk(StringRef Name)
   memcpy(&Data[2], Name.data(), Name.size());
 }
 
-void LookupChunk::applyRelocations(uint8_t *Buffer) {
-  write32le(Buffer + FileOff, HintName->getRVA());
+void LookupChunk::applyRelocations(uint8_t *Buf) {
+  write32le(Buf + FileOff, HintName->getRVA());
 }
 
-void DirectoryChunk::applyRelocations(uint8_t *Buffer) {
-  auto *E = (llvm::COFF::ImportDirectoryTableEntry *)(Buffer + FileOff);
+void DirectoryChunk::applyRelocations(uint8_t *Buf) {
+  auto *E = (llvm::COFF::ImportDirectoryTableEntry *)(Buf + FileOff);
   E->ImportLookupTableRVA = LookupTab->getRVA();
   E->NameRVA = DLLName->getRVA();
   E->ImportAddressTableRVA = AddressTab->getRVA();

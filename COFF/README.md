@@ -88,7 +88,7 @@ There are mainly three actors in this linker.
 * InputFile
 
   InputFile is a superclass for file readers. We have a different
-  subclasses for each input file type, such as regular object file,
+  subclass for each input file type, such as regular object file,
   archive file, etc. They are responsible for creating and owning
   SymbolBodies and Chunks.
 
