@@ -24,6 +24,7 @@
 
 using namespace llvm;
 using namespace llvm::object;
+using namespace llvm::COFF;
 
 static const int PageSize = 4096;
 static const int FileAlignment = 512;
@@ -31,10 +32,8 @@ static const int SectionAlignment = 4096;
 static const int DOSStubSize = 64;
 static const int NumberfOfDataDirectory = 16;
 static const int HeaderSize =
-    DOSStubSize + sizeof(llvm::COFF::PEMagic) +
-    sizeof(llvm::object::coff_file_header) +
-    sizeof(llvm::object::pe32plus_header) +
-    sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
+    DOSStubSize + sizeof(PEMagic) + sizeof(coff_file_header) +
+    sizeof(pe32plus_header) + sizeof(data_directory) * NumberfOfDataDirectory;
 
 namespace lld {
 namespace coff {
@@ -164,7 +163,7 @@ void Writer::createImportTables() {
   // Add the directory tables.
   for (ImportTable &T : Tabs)
     Idata->addChunk(T.DirTab);
-  Idata->addChunk(new NullChunk(sizeof(llvm::COFF::ImportDirectoryTableEntry)));
+  Idata->addChunk(new NullChunk(sizeof(ImportDirectoryTableEntry)));
 
   // Add the import lookup tables.
   for (ImportTable &T : Tabs) {
@@ -237,31 +236,30 @@ void Writer::writeHeader() {
   DOS->AddressOfNewExeHeader = DOSStubSize;
 
   // Write PE magic
-  memcpy(P, llvm::COFF::PEMagic, sizeof(llvm::COFF::PEMagic));
-  P += sizeof(llvm::COFF::PEMagic);
+  memcpy(P, PEMagic, sizeof(PEMagic));
+  P += sizeof(PEMagic);
 
   // Write COFF header
   coff_file_header *COFF = reinterpret_cast<coff_file_header *>(P);
   P += sizeof(coff_file_header);
-  COFF->Machine = llvm::COFF::IMAGE_FILE_MACHINE_AMD64;
+  COFF->Machine = IMAGE_FILE_MACHINE_AMD64;
   COFF->NumberOfSections = OutputSections.size();
-  COFF->Characteristics = (llvm::COFF::IMAGE_FILE_EXECUTABLE_IMAGE |
-                           llvm::COFF::IMAGE_FILE_RELOCS_STRIPPED |
-                           llvm::COFF::IMAGE_FILE_LARGE_ADDRESS_AWARE);
+  COFF->Characteristics =
+      (IMAGE_FILE_EXECUTABLE_IMAGE | IMAGE_FILE_RELOCS_STRIPPED |
+       IMAGE_FILE_LARGE_ADDRESS_AWARE);
   COFF->SizeOfOptionalHeader =
-      sizeof(pe32plus_header) +
-      sizeof(llvm::object::data_directory) * NumberfOfDataDirectory;
+      sizeof(pe32plus_header) + sizeof(data_directory) * NumberfOfDataDirectory;
 
   // Write PE header
   pe32plus_header *PE = reinterpret_cast<pe32plus_header *>(P);
   P += sizeof(pe32plus_header);
-  PE->Magic = llvm::COFF::PE32Header::PE32_PLUS;
+  PE->Magic = PE32Header::PE32_PLUS;
   PE->ImageBase = Config->ImageBase;
   PE->SectionAlignment = SectionAlignment;
   PE->FileAlignment = FileAlignment;
   PE->MajorOperatingSystemVersion = 6;
   PE->MajorSubsystemVersion = 6;
-  PE->Subsystem = llvm::COFF::IMAGE_SUBSYSTEM_WINDOWS_CUI;
+  PE->Subsystem = IMAGE_SUBSYSTEM_WINDOWS_CUI;
   PE->SizeOfImage = SizeOfImage;
   PE->SizeOfHeaders = SizeOfHeaders;
   PE->AddressOfEntryPoint = Entry->getRVA();
@@ -309,7 +307,7 @@ void Writer::writeSections() {
     // Fill gaps between functions in .text with INT3 instructions
     // instead of leaving as NUL bytes (which can be interpreted as
     // ADD instructions).
-    if (Sec->getPermissions() & llvm::COFF::IMAGE_SCN_CNT_CODE)
+    if (Sec->getPermissions() & IMAGE_SCN_CNT_CODE)
       memset(P + Sec->getFileOff(), 0xCC, Sec->getRawSize());
     for (Chunk *C : Sec->getChunks())
       if (C->hasData())
@@ -318,14 +316,13 @@ void Writer::writeSections() {
 }
 
 OutputSection *Writer::findSection(StringRef Name) {
-  for (std::unique_ptr<OutputSection> &S : OutputSections)
-    if (S->getName() == Name)
-      return S.get();
+  for (std::unique_ptr<OutputSection> &Sec : OutputSections)
+    if (Sec->getName() == Name)
+      return Sec.get();
   return nullptr;
 }
 
 uint32_t Writer::getSizeOfInitializedData() {
-  using llvm::COFF::IMAGE_SCN_CNT_INITIALIZED_DATA;
   uint32_t Res = 0;
   for (std::unique_ptr<OutputSection> &S : OutputSections)
     if (S->getPermissions() & IMAGE_SCN_CNT_INITIALIZED_DATA)
@@ -335,20 +332,18 @@ uint32_t Writer::getSizeOfInitializedData() {
 
 // Returns an existing section or create a new one if not found.
 OutputSection *Writer::createSection(StringRef Name) {
-  using namespace llvm::COFF;
   if (auto *Sec = findSection(Name))
     return Sec;
-  const auto Read = IMAGE_SCN_MEM_READ;
-  const auto Write = IMAGE_SCN_MEM_WRITE;
-  const auto Execute = IMAGE_SCN_MEM_EXECUTE;
-  uint32_t Perm =
-      StringSwitch<uint32_t>(Name)
-          .Case(".bss", IMAGE_SCN_CNT_UNINITIALIZED_DATA | Read | Write)
-          .Case(".data", IMAGE_SCN_CNT_INITIALIZED_DATA | Read | Write)
-          .Case(".idata", IMAGE_SCN_CNT_INITIALIZED_DATA | Read)
-          .Case(".rdata", IMAGE_SCN_CNT_INITIALIZED_DATA | Read)
-          .Case(".text", IMAGE_SCN_CNT_CODE | Read | Execute)
-          .Default(0);
+  const auto R = IMAGE_SCN_MEM_READ;
+  const auto W = IMAGE_SCN_MEM_WRITE;
+  const auto E = IMAGE_SCN_MEM_EXECUTE;
+  uint32_t Perm = StringSwitch<uint32_t>(Name)
+                      .Case(".bss", IMAGE_SCN_CNT_UNINITIALIZED_DATA | R | W)
+                      .Case(".data", IMAGE_SCN_CNT_INITIALIZED_DATA | R | W)
+                      .Case(".idata", IMAGE_SCN_CNT_INITIALIZED_DATA | R)
+                      .Case(".rdata", IMAGE_SCN_CNT_INITIALIZED_DATA | R)
+                      .Case(".text", IMAGE_SCN_CNT_CODE | R | E)
+                      .Default(0);
   if (!Perm)
     llvm_unreachable("unknown section name");
   auto Sec = new OutputSection(Name, OutputSections.size());
