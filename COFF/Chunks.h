@@ -141,7 +141,6 @@ private:
   const coff_section *Header;
   uint32_t SectionIndex;
   StringRef SectionName;
-  ArrayRef<uint8_t> Data;
   bool Live = false;
   std::vector<Chunk *> AssocChildren;
   bool IsAssocChild = false;
