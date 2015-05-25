@@ -58,7 +58,7 @@ public:
   // calling this function.
   virtual void applyRelocations(uint8_t *Buffer) {}
 
-  virtual bool isBSS() const { return false; }
+  virtual bool hasData() const { return true; }
   virtual bool isCOMDAT() const { return false; }
 
   // Returns readable/writable/executable bits.
@@ -109,7 +109,7 @@ public:
   const uint8_t *getData() const override;
   size_t getSize() const override { return Header->SizeOfRawData; }
   void applyRelocations(uint8_t *Buffer) override;
-  bool isBSS() const override;
+  bool hasData() const override;
   bool isCOMDAT() const override;
   uint32_t getPermissions() const override;
   StringRef getSectionName() const override { return SectionName; }
@@ -144,7 +144,7 @@ class CommonChunk : public Chunk {
 public:
   CommonChunk(const COFFSymbolRef S) : Sym(S) {}
   size_t getSize() const override { return Sym.getValue(); }
-  bool isBSS() const override { return true; }
+  bool hasData() const override { return false; }
   uint32_t getPermissions() const override;
   StringRef getSectionName() const override { return ".bss"; }
 

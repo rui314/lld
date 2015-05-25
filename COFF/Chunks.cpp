@@ -29,7 +29,7 @@ namespace coff {
 SectionChunk::SectionChunk(ObjectFile *F, const coff_section *H, uint32_t SI)
     : File(F), Header(H), SectionIndex(SI) {
   File->getCOFFObj()->getSectionName(Header, SectionName);
-  if (!isBSS())
+  if (hasData())
     File->getCOFFObj()->getSectionContents(Header, Data);
   // Bit [20:24] contains section alignment.
   unsigned Shift = ((Header->Characteristics & 0xF00000) >> 20) - 1;
@@ -37,7 +37,7 @@ SectionChunk::SectionChunk(ObjectFile *F, const coff_section *H, uint32_t SI)
 }
 
 const uint8_t *SectionChunk::getData() const {
-  assert(!isBSS());
+  assert(hasData());
   return Data.data();
 }
 
@@ -111,8 +111,8 @@ void SectionChunk::applyReloc(uint8_t *Buffer, const coff_relocation *Rel) {
   }
 }
 
-bool SectionChunk::isBSS() const {
-  return Header->Characteristics & llvm::COFF::IMAGE_SCN_CNT_UNINITIALIZED_DATA;
+bool SectionChunk::hasData() const {
+  return !(Header->Characteristics & llvm::COFF::IMAGE_SCN_CNT_UNINITIALIZED_DATA);
 }
 
 uint32_t SectionChunk::getPermissions() const {

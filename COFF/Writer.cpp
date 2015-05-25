@@ -67,7 +67,7 @@ void OutputSection::addChunk(Chunk *C) {
   C->setFileOff(Off);
   Off += C->getSize();
   Header.VirtualSize = Off;
-  if (!C->isBSS())
+  if (C->hasData())
     Header.SizeOfRawData = RoundUpToAlignment(Off, FileAlignment);
 }
 
@@ -312,7 +312,7 @@ void Writer::writeSections() {
     if (Sec->getPermissions() & llvm::COFF::IMAGE_SCN_CNT_CODE)
       memset(P + Sec->getFileOff(), 0xCC, Sec->getRawSize());
     for (Chunk *C : Sec->getChunks())
-      if (!C->isBSS())
+      if (C->hasData())
         memcpy(P + C->getFileOff(), C->getData(), C->getSize());
   }
 }
