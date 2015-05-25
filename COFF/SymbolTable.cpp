@@ -88,6 +88,8 @@ bool SymbolTable::reportRemainingUndefines() {
     Symbol *Sym = I.second;
     if (auto *Undef = dyn_cast<Undefined>(Sym->Body)) {
       if (SymbolBody *Alias = Undef->getWeakAlias()) {
+        // The StringBody object may be stale. Get the latest result
+        // by following the back pointer and then the forward poitner.
         Sym->Body = Alias->getSymbol()->Body;
         continue;
       }

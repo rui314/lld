@@ -17,11 +17,11 @@ Overall Design
 
 This is a list of important data types in this linker.
 
-* Symbol and SymbolBody
+* SymbolBody
 
-  SymbolBody is a class for symbols, which may be read from symbol
-  tables of object files or archive file headers. They also can be
-  created by the linker itself out of nothing.
+  SymbolBody is a class for symbols, which may be created for symbols
+  in object files or in archive file headers. The linker may create
+  them out of nothing.
 
   There are mainly three types of SymbolBodies: Defined, Undefined, or
   CanBeDefined. Defined symbols are for all symbols that are
@@ -33,11 +33,26 @@ This is a list of important data types in this linker.
   turn into Defined symbols if we read archieve members, but we
   haven't done that yet.
 
+* Symbol
+
   Symbol is a pointer to a SymbolBody. There's only one Symbol for
-  each unique symbol name, so there can be many SymbolBodies that a
-  Symbol can point to. The resolver keeps the Symbol pointer to always
-  point to the "best" SymbolBody. Pointer mutation is the resolve
-  operation.
+  each unique symbol name (This uniqueness is guaranteed by the symbol
+  table). Because SymbolBodies are created for each file
+  independently, there can be many SymbolBodies for the same
+  name. Thus the relationship between Symbols and SymbolBodies is 1:N.
+
+  The resolver keeps the Symbol pointer to always point to the "best"
+  SymbolBody. Pointer mutation is the resolve operation in this
+  linker.
+
+  SymbolBodies have pointers to Symbols. Only best SymbolBodies are
+  doubly-linked with Symbols. That means you can always find the best
+  SymbolBody from any SymbolBody by following pointers two
+  times. (These pointers make it very easy to find replacements for
+  symbols. For example, if you have an Undefined SymbolBody, you can
+  find a Defined SymbolBody for that symbol just by dereferencing
+  pointers two times, assuming the resolver have successfully resolved
+  all undefined symbols.)
 
 * Chunk
 
@@ -52,33 +67,50 @@ This is a list of important data types in this linker.
   section-based chunks know how to read relocation tables and how to
   apply them.
 
+* SymbolTable
+
+  SymbolTable is basically a hash table from strings to Symbols, with
+  a logic to resolve symbol conflicts. It resolves conflicts by symbol
+  type. For example, if we add Undefined and Defined symbols, the
+  symbol table will keep the latter. If we add Undefined and
+  CanBeDefined symbols, it will keep the latter. If we add
+  CanBeDefined and Undefined, it will keep the former, but it will
+  also trigger the CanBeDefined symbol to load the archive member to
+  actually resolve the symbol.
+
+* OutputSection
+
+  OutputSection is a container of Chunks. A Chunk belong to at most
+  one OutputSection.
+
+There are mainly three actors in this linker.
+
 * InputFile
 
   InputFile is a superclass for file readers. We have a different
   subclasses for each input file type, such as regular object file,
-  archive file, etc. They are responsible for creating SymbolBodies
-  and Chunks.
+  archive file, etc. They are responsible for creating and owning
+  SymbolBodies and Chunks.
 
-* SymbolTable
+* Writer
 
-  SymbolTable is basically a hash table from strings to Symbols,
-  with a logic to resolve symbol conflicts. It resolves conflicts by
-  symbol type. For example, if we add Undefined and Defined symbols,
-  the symbol table will keep the latter. If we add CanBeDefined and
-  Undefined, it will keep the former, but it will also trigger the
-  CanBeDefined symbol to load the archive member to actually resolve
-  the symbol.
+  The writer is responsible for writing file headers and Chunks to a
+  file. It creates OutputSections, put all Chunks into them, assign
+  unique, non-overlapping addresses and file offsets to them, and then
+  write them down to a file.
 
-The linking process is drived by the driver. The driver
+* Driver
 
-1. processes command line options,
-2. creates a symbol table,
-3. creates an InputFile for each input file and put all symbols in it
-   into the symbol table,
-4. checks if there's no remaining undefined symbols,
-5. creates a writer,
-6. and passes the symbol table to the writer to write the result to a
-   file.
+  The linking process is drived by the driver. The driver
+
+  1. processes command line options,
+  2. creates a symbol table,
+  3. creates an InputFile for each input file and put all symbols in it
+     into the symbol table,
+  4. checks if there's no remaining undefined symbols,
+  5. creates a writer,
+  6. and passes the symbol table to the writer to write the result to a
+     file.
 
 Performance
 -----------
@@ -149,11 +181,15 @@ Parallelism
 -----------
 
 The abovementioned data structures are also chosen with
-multi-threading in mind. It should be relatively easy to make the
-symbol table a concurrent hash map, so that multiple threads read
-files and put their symbols into the symbol table concurrently. Symbol
-resolution in this design is a single pointer mutation, so we can make
-it atomic using compare-and-swap.
+multi-threading in mind. It is relatively easy to make the symbol
+table a concurrent hash map, so that we let multiple workers read
+files and put symbols into the symbol table concurrently. Symbol
+resolution in this design is a single pointer mutation, which allows
+the resolver work concurrently in a lock-free manner using atomic
+pointer compare-and-swap.
 
-It should also be easy to apply relocations and write chunks
-concurrently.
+It is also easy to apply relocations and write chunks concurrently.
+
+We created an experimental multi-threaded linker using the Microsoft
+ConcRT concurrency library, and it was able to link itself in 0.5
+seconds, so we believe the design was proved to work.

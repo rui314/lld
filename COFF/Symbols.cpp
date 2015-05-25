@@ -51,8 +51,8 @@ int CanBeDefined::compare(SymbolBody *Other) {
   // Undefined symbols with weak aliases will turn into defined
   // symbols if they remain undefined, so we don't need to resolve
   // such symbols.
-  if (auto *O = dyn_cast<Undefined>(Other))
-    if (O->getWeakAlias())
+  if (auto *U = dyn_cast<Undefined>(Other))
+    if (U->getWeakAlias())
       return -1;
   return 1;
 }
