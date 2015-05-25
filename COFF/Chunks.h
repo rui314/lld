@@ -16,6 +16,7 @@
 #include <map>
 #include <vector>
 
+using llvm::COFF::ImportDirectoryTableEntry;
 using llvm::object::COFFSymbolRef;
 using llvm::object::SectionRef;
 using llvm::object::coff_relocation;
@@ -40,7 +41,7 @@ public:
 
   // Returns the pointer to data. It is illegal to call this function if
   // this is a common or BSS chunk.
-  virtual const uint8_t *getData() const = 0;
+  virtual const uint8_t *getData() const { llvm_unreachable("internal error"); }
 
   // Returns the size of this chunk (even if this is a common or BSS.)
   virtual size_t getSize() const = 0;
@@ -148,10 +149,6 @@ public:
   uint32_t getPermissions() const override;
   StringRef getSectionName() const override { return ".bss"; }
 
-  const uint8_t *getData() const override {
-    llvm_unreachable("internal error");
-  }
-
 private:
   const COFFSymbolRef Sym;
 };
@@ -204,41 +201,35 @@ private:
 class LookupChunk : public Chunk {
 public:
   explicit LookupChunk(HintNameChunk *H) : HintName(H) {}
-  const uint8_t *getData() const override { return (const uint8_t *)&Ent; }
-  size_t getSize() const override { return sizeof(Ent); }
+  bool hasData() const override { return false; }
+  size_t getSize() const override { return 8; }
   void applyRelocations(uint8_t *Buffer) override;
   HintNameChunk *HintName;
-
-private:
-  uint64_t Ent = 0;
 };
 
 // A chunk for the import descriptor table.
 class DirectoryChunk : public Chunk {
 public:
   explicit DirectoryChunk(StringChunk *N) : DLLName(N) {}
-  const uint8_t *getData() const override { return (const uint8_t *)&Ent; }
-  size_t getSize() const override { return sizeof(Ent); }
+  bool hasData() const override { return false; }
+  size_t getSize() const override { return sizeof(ImportDirectoryTableEntry); }
   void applyRelocations(uint8_t *Buffer) override;
 
   StringChunk *DLLName;
   LookupChunk *LookupTab;
   LookupChunk *AddressTab;
-
-private:
-  llvm::COFF::ImportDirectoryTableEntry Ent = {};
 };
 
 // A chunk for the import descriptor table.
 class NullChunk : public Chunk {
 public:
-  explicit NullChunk(size_t Size) : Data(Size) {}
-  const uint8_t *getData() const override { return Data.data(); }
-  size_t getSize() const override { return Data.size(); }
+  explicit NullChunk(size_t N) : Size(N) {}
+  bool hasData() const override { return false; }
+  size_t getSize() const override { return Size; }
   void applyRelocations(uint8_t *Buffer) override {}
 
 private:
-  std::vector<uint8_t> Data;
+  size_t Size;
 };
 
 // ImportTable creates a set of import table chunks for a given
