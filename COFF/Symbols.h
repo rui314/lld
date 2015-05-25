@@ -34,7 +34,7 @@ class SymbolBody;
 // through a Symbol. There's always one Symbol for each symbol name.
 // The resolver updates SymbolBody pointers as it resolves symbols.
 struct Symbol {
-  Symbol(SymbolBody *P) : Body(P) {}
+  explicit Symbol(SymbolBody *P) : Body(P) {}
   SymbolBody *Body;
 };
 
@@ -235,7 +235,7 @@ private:
 // Undefined symbols.
 class Undefined : public SymbolBody {
 public:
-  Undefined(StringRef Name, SymbolBody **S = nullptr)
+  explicit Undefined(StringRef Name, SymbolBody **S = nullptr)
       : SymbolBody(UndefinedKind, Name), Alias(S) {}
 
   static bool classof(const SymbolBody *S) {

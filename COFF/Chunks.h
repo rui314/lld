@@ -159,7 +159,7 @@ private:
 // A chunk for linker-created strings.
 class StringChunk : public Chunk {
 public:
-  StringChunk(StringRef S) : Data(S.size() + 1) {
+  explicit StringChunk(StringRef S) : Data(S.size() + 1) {
     memcpy(Data.data(), S.data(), S.size());
     Data[S.size()] = 0;
   }
@@ -179,7 +179,7 @@ static const uint8_t ImportFuncData[] = {
 // contents will be a JMP instruction to some __imp_ symbol.
 class ImportFuncChunk : public Chunk {
 public:
-  ImportFuncChunk(Defined *S)
+  explicit ImportFuncChunk(Defined *S)
       : ImpSymbol(S),
         Data(ImportFuncData, ImportFuncData + sizeof(ImportFuncData)) {}
 
@@ -195,7 +195,7 @@ private:
 // A chunk for the import descriptor table.
 class HintNameChunk : public Chunk {
 public:
-  HintNameChunk(StringRef Name);
+  explicit HintNameChunk(StringRef Name);
   const uint8_t *getData() const override { return Data.data(); }
   size_t getSize() const override { return Data.size(); }
   void applyRelocations(uint8_t *Buffer) override {}
@@ -207,7 +207,7 @@ private:
 // A chunk for the import descriptor table.
 class LookupChunk : public Chunk {
 public:
-  LookupChunk(HintNameChunk *H) : HintName(H) {}
+  explicit LookupChunk(HintNameChunk *H) : HintName(H) {}
   const uint8_t *getData() const override { return (const uint8_t *)&Ent; }
   size_t getSize() const override { return sizeof(Ent); }
   void applyRelocations(uint8_t *Buffer) override;
@@ -220,7 +220,7 @@ private:
 // A chunk for the import descriptor table.
 class DirectoryChunk : public Chunk {
 public:
-  DirectoryChunk(StringChunk *N) : DLLName(N) {}
+  explicit DirectoryChunk(StringChunk *N) : DLLName(N) {}
   const uint8_t *getData() const override { return (const uint8_t *)&Ent; }
   size_t getSize() const override { return sizeof(Ent); }
   void applyRelocations(uint8_t *Buffer) override;
@@ -236,7 +236,7 @@ private:
 // A chunk for the import descriptor table.
 class NullChunk : public Chunk {
 public:
-  NullChunk(size_t Size) : Data(Size) {}
+  explicit NullChunk(size_t Size) : Data(Size) {}
   const uint8_t *getData() const override { return Data.data(); }
   size_t getSize() const override { return Data.size(); }
   void applyRelocations(uint8_t *Buffer) override {}

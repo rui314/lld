@@ -153,7 +153,7 @@ private:
 // for details about the format.
 class ImportFile : public InputFile {
 public:
-  ImportFile(MemoryBufferRef M) : InputFile(ImportKind), MBRef(M) {
+  explicit ImportFile(MemoryBufferRef M) : InputFile(ImportKind), MBRef(M) {
     readImports();
   }
 
