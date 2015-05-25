@@ -94,6 +94,7 @@ private:
   Defined *Entry;
   uint64_t FileSize;
   uint64_t SizeOfImage;
+  uint64_t SizeOfHeaders;
 
   std::vector<std::unique_ptr<Chunk>> Chunks;
 };

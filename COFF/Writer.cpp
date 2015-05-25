@@ -211,18 +211,19 @@ void Writer::removeEmptySections() {
 // Visits all sections to assign incremental, non-overlapping RVAs and
 // file offsets.
 void Writer::assignAddresses() {
-  uint64_t HeaderEnd = RoundUpToAlignment(
+  SizeOfHeaders = RoundUpToAlignment(
       HeaderSize + sizeof(coff_section) * OutputSections.size(), PageSize);
   uint64_t RVA = 0x1000; // The first page is kept unmapped.
-  uint64_t FileOff = HeaderEnd;
+  uint64_t FileOff = SizeOfHeaders;
   for (std::unique_ptr<OutputSection> &Sec : OutputSections) {
     Sec->setRVA(RVA);
     Sec->setFileOffset(FileOff);
     RVA += RoundUpToAlignment(Sec->getVirtualSize(), PageSize);
     FileOff += RoundUpToAlignment(Sec->getRawSize(), FileAlignment);
   }
-  SizeOfImage = HeaderEnd + RoundUpToAlignment(RVA - 0x1000, PageSize);
-  FileSize = HeaderEnd + RoundUpToAlignment(FileOff - HeaderEnd, FileAlignment);
+  SizeOfImage = SizeOfHeaders + RoundUpToAlignment(RVA - 0x1000, PageSize);
+  FileSize = SizeOfHeaders +
+             RoundUpToAlignment(FileOff - SizeOfHeaders, FileAlignment);
 }
 
 void Writer::writeHeader() {
@@ -262,6 +263,7 @@ void Writer::writeHeader() {
   PE->MajorSubsystemVersion = 6;
   PE->Subsystem = llvm::COFF::IMAGE_SUBSYSTEM_WINDOWS_CUI;
   PE->SizeOfImage = SizeOfImage;
+  PE->SizeOfHeaders = SizeOfHeaders;
   PE->AddressOfEntryPoint = Entry->getRVA();
   PE->SizeOfStackReserve = 1024 * 1024;
   PE->SizeOfStackCommit = 4096;
@@ -290,8 +292,6 @@ void Writer::writeHeader() {
   int Idx = 0;
   for (std::unique_ptr<OutputSection> &Out : OutputSections)
     SectionTable[Idx++] = Out->getHeader();
-  PE->SizeOfHeaders = RoundUpToAlignment(
-      HeaderSize + sizeof(coff_section) * OutputSections.size(), FileAlignment);
 }
 
 std::error_code Writer::openFile(StringRef Path) {
