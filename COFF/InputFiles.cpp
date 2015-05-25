@@ -100,7 +100,7 @@ std::error_code ObjectFile::parse() {
   std::unique_ptr<Binary> Bin = std::move(BinOrErr.get());
 
   if (!isa<COFFObjectFile>(Bin.get()))
-    return lld::make_dynamic_error_code(Twine(Name) + " is not a COFF file.");
+    return make_dynamic_error_code(Twine(Name) + " is not a COFF file.");
   COFFObj.reset(cast<COFFObjectFile>(Bin.release()));
 
   // Read section and symbol tables.
@@ -122,11 +122,11 @@ std::error_code ObjectFile::initializeChunks() {
     const coff_section *Sec;
     StringRef Name;
     if (auto EC = COFFObj->getSection(I, Sec))
-      return lld::make_dynamic_error_code(Twine("getSection failed: ") + Name +
-                                          ": " + EC.message());
+      return make_dynamic_error_code(Twine("getSection failed: ") + Name +
+                                     ": " + EC.message());
     if (auto EC = COFFObj->getSectionName(Sec, Name))
-      return lld::make_dynamic_error_code(Twine("getSectionName failed: ") +
-                                          Name + ": " + EC.message());
+      return make_dynamic_error_code(Twine("getSectionName failed: ") + Name +
+                                     ": " + EC.message());
     if (Name == ".drectve") {
       ArrayRef<uint8_t> Data;
       COFFObj->getSectionContents(Sec, Data);
@@ -152,15 +152,15 @@ std::error_code ObjectFile::initializeSymbols() {
     // Get a COFFSymbolRef object.
     auto SymOrErr = COFFObj->getSymbol(I);
     if (auto EC = SymOrErr.getError())
-      return lld::make_dynamic_error_code(Twine("broken object file: ") + Name +
-                                          ": " + EC.message());
+      return make_dynamic_error_code(Twine("broken object file: ") + Name +
+                                     ": " + EC.message());
     COFFSymbolRef Sym = SymOrErr.get();
 
     // Get a symbol name.
     StringRef SymbolName;
     if (auto EC = COFFObj->getSymbolName(Sym, SymbolName))
-      return lld::make_dynamic_error_code(Twine("broken object file: ") + Name +
-                                          ": " + EC.message());
+      return make_dynamic_error_code(Twine("broken object file: ") + Name +
+                                     ": " + EC.message());
     // Skip special symbols.
     if (SymbolName == "@comp.id" || SymbolName == "@feat.00")
       continue;

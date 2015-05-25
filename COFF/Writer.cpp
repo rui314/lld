@@ -289,7 +289,7 @@ void Writer::writeHeader() {
   coff_section *SectionTable = reinterpret_cast<coff_section *>(P);
   int Idx = 0;
   for (std::unique_ptr<OutputSection> &Out : OutputSections)
-    SectionTable[Idx++] = *Out->getHeader();
+    SectionTable[Idx++] = Out->getHeader();
   PE->SizeOfHeaders = RoundUpToAlignment(
       HeaderSize + sizeof(coff_section) * OutputSections.size(), FileAlignment);
 }

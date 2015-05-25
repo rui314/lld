@@ -121,7 +121,7 @@ parseArgs(int Argc, const char *Argv[]) {
                        Args->getArgString(MissingIndex), MissingCount,
                        (MissingCount == 1 ? "" : "s"));
     OS.flush();
-    return lld::make_dynamic_error_code(StringRef(S));
+    return make_dynamic_error_code(StringRef(S));
   }
   for (auto *Arg : Args->filtered(OPT_UNKNOWN))
     llvm::errs() << "ignoring unknown argument: " << Arg->getSpelling() << "\n";
@@ -226,7 +226,7 @@ bool link(int Argc, const char *Argv[]) {
   if (Symtab.reportRemainingUndefines())
     return false;
 
-  // Emit the result.
+  // Write the result.
   Writer Out(&Symtab);
   if (auto EC = Out.write(getOutputPath(Args.get()))) {
     llvm::errs() << EC.message() << "\n";
