@@ -31,7 +31,8 @@ SectionChunk::SectionChunk(ObjectFile *F, const coff_section *H, uint32_t SI)
   File->getCOFFObj()->getSectionName(Header, SectionName);
   if (!isBSS())
     File->getCOFFObj()->getSectionContents(Header, Data);
-  unsigned Shift = ((Header->Characteristics & 0x00F00000) >> 20) - 1;
+  // Bit [20:24] contains section alignment.
+  unsigned Shift = ((Header->Characteristics & 0xF00000) >> 20) - 1;
   Align = uint32_t(1) << Shift;
 }
 
@@ -41,20 +42,32 @@ const uint8_t *SectionChunk::getData() const {
 }
 
 bool SectionChunk::isRoot() {
-  return !isCOMDAT() && !IsAssocChild &&
-         !(Header->Characteristics & llvm::COFF::IMAGE_SCN_CNT_CODE);
+  if (isCOMDAT())
+    return false;
+
+  // Associative sections are live if their parent COMDATs are live,
+  // and vice versa, so they are not considered live by themselves.
+  if (IsAssocChild)
+    return false;
+
+  // Only code is subject of dead-stripping.
+  return !(Header->Characteristics & llvm::COFF::IMAGE_SCN_CNT_CODE);
 }
 
 void SectionChunk::markLive() {
   if (Live)
     return;
   Live = true;
+
+  // Mark all symbols listed in the relocation table for this section.
   for (const auto &I : getSectionRef().relocations()) {
     const coff_relocation *Rel = File->getCOFFObj()->getCOFFRelocation(I);
-    if (auto *S =
-            dyn_cast<Defined>(File->getSymbol(Rel->SymbolTableIndex)->Body))
-      S->markLive();
+    SymbolBody *B = File->getSymbol(Rel->SymbolTableIndex)->Body;
+    if (auto *Def = dyn_cast<Defined>(B))
+      Def->markLive();
   }
+
+  // Mark associative sections if any.
   for (Chunk *C : AssocChildren)
     C->markLive();
 }

@@ -19,6 +19,8 @@
 namespace lld {
 namespace coff {
 
+// Mask for section types (code, data or bss) and permissions
+// (writable, readable or executable).
 const uint32_t PermMask = 0xF00000F0;
 
 // OutputSection represents a section in an output file. It's a
