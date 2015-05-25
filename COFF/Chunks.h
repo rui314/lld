@@ -179,17 +179,13 @@ static const uint8_t ImportFuncData[] = {
 // contents will be a JMP instruction to some __imp_ symbol.
 class ImportFuncChunk : public Chunk {
 public:
-  explicit ImportFuncChunk(Defined *S)
-      : ImpSymbol(S),
-        Data(ImportFuncData, ImportFuncData + sizeof(ImportFuncData)) {}
-
-  const uint8_t *getData() const override { return &Data[0]; }
-  size_t getSize() const override { return Data.size(); }
+  explicit ImportFuncChunk(Defined *S) : ImpSymbol(S) {}
+  const uint8_t *getData() const override { return ImportFuncData; }
+  size_t getSize() const override { return sizeof(ImportFuncData); }
   void applyRelocations(uint8_t *Buffer) override;
 
 private:
   Defined *ImpSymbol;
-  std::vector<uint8_t> Data;
 };
 
 // A chunk for the import descriptor table.

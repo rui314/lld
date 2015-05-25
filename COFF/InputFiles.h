@@ -38,7 +38,7 @@ public:
   virtual StringRef getName() = 0;
 
   // Returns symbols defined by this file.
-  virtual std::vector<std::unique_ptr<SymbolBody>> &getSymbols() = 0;
+  virtual std::vector<SymbolBody *> &getSymbols() = 0;
 
   // Reads a file (constructors don't do that). Returns an error if a
   // file is broken.
@@ -75,16 +75,15 @@ public:
   ErrorOr<MemoryBufferRef> getMember(const Archive::Symbol *Sym);
 
   // NB: All symbols returned by ArchiveFiles are of CanBeDefined type.
-  std::vector<std::unique_ptr<SymbolBody>> &getSymbols() override {
-    return SymbolBodies;
-  }
+  std::vector<SymbolBody *> &getSymbols() override { return SymbolBodies; }
 
 private:
   std::unique_ptr<Archive> File;
   std::string Name;
   std::unique_ptr<MemoryBuffer> MB;
-  std::vector<std::unique_ptr<SymbolBody>> SymbolBodies;
+  std::vector<SymbolBody *> SymbolBodies;
   std::set<const char *> Seen;
+  llvm::BumpPtrAllocator Alloc;
 };
 
 // .obj or .o file. This may be a member of an archive file.
@@ -95,25 +94,20 @@ public:
       : InputFile(ObjectKind), Name(S), MBRef(M) {}
 
   static bool classof(const InputFile *F) { return F->kind() == ObjectKind; }
-
   std::error_code parse() override;
   StringRef getName() override { return Name; }
+  std::vector<Chunk *> &getChunks() { return Chunks; }
+  std::vector<SymbolBody *> &getSymbols() override { return SymbolBodies; }
 
   // Returns a Symbol object for the SymbolIndex'th symbol in the
   // underlying object file.
   Symbol *getSymbol(uint32_t SymbolIndex);
-
-  std::vector<std::unique_ptr<Chunk>> &getChunks() { return Chunks; }
 
   // Returns .drectve section contents if exist.
   StringRef getDirectives() { return Directives; }
 
   // Returns the underying COFF file.
   COFFObjectFile *getCOFFObj() { return COFFObj.get(); }
-
-  std::vector<std::unique_ptr<SymbolBody>> &getSymbols() override {
-    return SymbolBodies;
-  }
 
 private:
   std::error_code initializeChunks();
@@ -127,11 +121,12 @@ private:
   std::unique_ptr<MemoryBuffer> MB;
   MemoryBufferRef MBRef;
   StringRef Directives;
+  llvm::BumpPtrAllocator Alloc;
 
   // List of all chunks defined by this file. The first chunks
   // represents sections which may be followed by other non-section
   // chunks such as common symbols.
-  std::vector<std::unique_ptr<Chunk>> Chunks;
+  std::vector<Chunk *> Chunks;
 
   // This vector contains the same chunks as Chunks, but they are
   // indexed such that you can get a SectionChunk by section
@@ -141,7 +136,7 @@ private:
   std::vector<Chunk *> SparseChunks;
 
   // List of all symbols referenced or defined by this file.
-  std::vector<std::unique_ptr<SymbolBody>> SymbolBodies;
+  std::vector<SymbolBody *> SymbolBodies;
 
   // This vector contains the same symbols as SymbolBodies, but they
   // are indexed such that you can get a SymbolBody by symbol
@@ -161,17 +156,15 @@ public:
 
   static bool classof(const InputFile *F) { return F->kind() == ImportKind; }
   StringRef getName() override { return MBRef.getBufferIdentifier(); }
-
-  std::vector<std::unique_ptr<SymbolBody>> &getSymbols() override {
-    return SymbolBodies;
-  }
+  std::vector<SymbolBody *> &getSymbols() override { return SymbolBodies; }
 
 private:
   void readImports();
 
   MemoryBufferRef MBRef;
-  std::vector<std::unique_ptr<SymbolBody>> SymbolBodies;
-  StringAllocator Alloc;
+  std::vector<SymbolBody *> SymbolBodies;
+  llvm::BumpPtrAllocator Alloc;
+  StringAllocator StringAlloc;
 };
 
 } // namespace coff

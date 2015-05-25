@@ -125,14 +125,14 @@ std::map<StringRef, std::vector<DefinedImportData *>> Writer::binImports() {
   std::map<StringRef, std::vector<DefinedImportData *>> Res;
   OutputSection *Text = createSection(".text");
   for (std::unique_ptr<ImportFile> &P : Symtab->ImportFiles) {
-    for (std::unique_ptr<SymbolBody> &B : P->getSymbols()) {
-      if (auto *Import = dyn_cast<DefinedImportData>(B.get())) {
+    for (SymbolBody *B : P->getSymbols()) {
+      if (auto *Import = dyn_cast<DefinedImportData>(B)) {
         Res[Import->getDLLName()].push_back(Import);
         continue;
       }
       // Linker-created function thunks for DLL symbols are added to
       // .text section.
-      Text->addChunk(cast<DefinedImportFunc>(B.get())->getChunk());
+      Text->addChunk(cast<DefinedImportFunc>(B)->getChunk());
     }
   }
 

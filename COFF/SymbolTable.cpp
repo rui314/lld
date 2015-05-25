@@ -43,16 +43,16 @@ std::error_code SymbolTable::addFile(std::unique_ptr<InputFile> File) {
 
 std::error_code SymbolTable::addFile(ObjectFile *File) {
   ObjectFiles.emplace_back(File);
-  for (std::unique_ptr<SymbolBody> &Body : File->getSymbols()) {
+  for (SymbolBody *Body : File->getSymbols()) {
     if (Body->isExternal()) {
       // Only externally-visible symbols are subjects of symbol
       // resolution.
       Symbol *Sym;
-      if (auto EC = resolve(Body.get(), &Sym))
+      if (auto EC = resolve(Body, &Sym))
         return EC;
       Body->setBackref(Sym);
     } else {
-      Body->setBackref(new (Alloc) Symbol(Body.get()));
+      Body->setBackref(new (Alloc) Symbol(Body));
     }
   }
 
@@ -71,16 +71,16 @@ std::error_code SymbolTable::addFile(ObjectFile *File) {
 
 std::error_code SymbolTable::addFile(ArchiveFile *File) {
   ArchiveFiles.emplace_back(File);
-  for (std::unique_ptr<SymbolBody> &Body : File->getSymbols())
-    if (auto EC = resolve(Body.get(), nullptr))
+  for (SymbolBody *Body : File->getSymbols())
+    if (auto EC = resolve(Body, nullptr))
       return EC;
   return std::error_code();
 }
 
 std::error_code SymbolTable::addFile(ImportFile *File) {
   ImportFiles.emplace_back(File);
-  for (std::unique_ptr<SymbolBody> &Body : File->getSymbols())
-    if (auto EC = resolve(Body.get(), nullptr))
+  for (SymbolBody *Body : File->getSymbols())
+    if (auto EC = resolve(Body, nullptr))
       return EC;
   return std::error_code();
 }
@@ -128,8 +128,8 @@ std::error_code SymbolTable::resolve(SymbolBody *New, Symbol **SymP) {
   if (comp == 0)
     return make_dynamic_error_code(Twine("duplicate symbol: ") + Name);
 
-  // If we have an Undefined symbol for a CanBeDefined symbol, we need to
-  // read an archive member to replace the CanBeDefined symbol with
+  // If we have an Undefined symbol for a CanBeDefined symbol, we need
+  // to read an archive member to replace the CanBeDefined symbol with
   // a Defined symbol.
   if (isa<Undefined>(Existing) || isa<Undefined>(New))
     if (auto *B = dyn_cast<CanBeDefined>(Sym->Body))
@@ -157,8 +157,8 @@ std::error_code SymbolTable::addMemberFile(CanBeDefined *Body) {
 std::vector<Chunk *> SymbolTable::getChunks() {
   std::vector<Chunk *> Res;
   for (std::unique_ptr<ObjectFile> &File : ObjectFiles)
-    for (std::unique_ptr<Chunk> &C : File->getChunks())
-      Res.push_back(C.get());
+    for (Chunk *C : File->getChunks())
+      Res.push_back(C);
   return Res;
 }
 

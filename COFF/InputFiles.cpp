@@ -61,7 +61,7 @@ std::error_code ArchiveFile::parse() {
     // Skip special symbol exists in import library files.
     if (Sym.getName() == "__NULL_IMPORT_DESCRIPTOR")
       continue;
-    SymbolBodies.push_back(llvm::make_unique<CanBeDefined>(this, Sym));
+    SymbolBodies.push_back(new (Alloc) CanBeDefined(this, Sym));
   }
   return std::error_code();
 }
@@ -117,6 +117,7 @@ Symbol *ObjectFile::getSymbol(uint32_t SymbolIndex) {
 
 std::error_code ObjectFile::initializeChunks() {
   uint32_t NumSections = COFFObj->getNumberOfSections();
+  Chunks.reserve(NumSections + 1);
   SparseChunks.resize(NumSections + 1);
   for (uint32_t I = 1; I < NumSections + 1; ++I) {
     const coff_section *Sec;
@@ -137,8 +138,8 @@ std::error_code ObjectFile::initializeChunks() {
       continue;
     if (Sec->Characteristics & llvm::COFF::IMAGE_SCN_LNK_REMOVE)
       continue;
-    auto *C = new SectionChunk(this, Sec, I);
-    Chunks.push_back(std::unique_ptr<SectionChunk>(C));
+    auto *C = new (Alloc) SectionChunk(this, Sec, I);
+    Chunks.push_back(C);
     SparseChunks[I] = C;
   }
   return std::error_code();
@@ -146,6 +147,7 @@ std::error_code ObjectFile::initializeChunks() {
 
 std::error_code ObjectFile::initializeSymbols() {
   uint32_t NumSymbols = COFFObj->getNumberOfSymbols();
+  SymbolBodies.reserve(NumSymbols);
   SparseSymbolBodies.resize(NumSymbols);
   int32_t LastSectionNumber = 0;
   for (uint32_t I = 0; I < NumSymbols; ++I) {
@@ -170,11 +172,10 @@ std::error_code ObjectFile::initializeSymbols() {
       AuxP = COFFObj->getSymbol(I + 1)->getRawPtr();
     bool IsFirst = (LastSectionNumber != Sym.getSectionNumber());
 
-    std::unique_ptr<SymbolBody> Body(
-        createSymbolBody(SymbolName, Sym, AuxP, IsFirst));
+    SymbolBody *Body = createSymbolBody(SymbolName, Sym, AuxP, IsFirst);
     if (Body) {
-      SparseSymbolBodies[I] = Body.get();
-      SymbolBodies.push_back(std::move(Body));
+      SymbolBodies.push_back(Body);
+      SparseSymbolBodies[I] = Body;
     }
     I += Sym.getNumberOfAuxSymbols();
     LastSectionNumber = Sym.getSectionNumber();
@@ -187,16 +188,16 @@ SymbolBody *ObjectFile::createSymbolBody(StringRef Name, COFFSymbolRef Sym,
   if (Sym.isUndefined())
     return new Undefined(Name);
   if (Sym.isCommon()) {
-    Chunk *C = new CommonChunk(Sym);
-    Chunks.push_back(std::unique_ptr<Chunk>(C));
-    return new DefinedRegular(this, Name, Sym, C);
+    Chunk *C = new (Alloc) CommonChunk(Sym);
+    Chunks.push_back(C);
+    return new (Alloc) DefinedRegular(this, Name, Sym, C);
   }
   if (Sym.getSectionNumber() == -1) {
-    return new DefinedAbsolute(Name, Sym.getValue());
+    return new (Alloc) DefinedAbsolute(Name, Sym.getValue());
   }
   if (Sym.isWeakExternal()) {
     auto *Aux = (const coff_aux_weak_external *)AuxP;
-    return new Undefined(Name, &SparseSymbolBodies[Aux->TagIndex]);
+    return new (Alloc) Undefined(Name, &SparseSymbolBodies[Aux->TagIndex]);
   }
   if (IsFirst && AuxP) {
     if (Chunk *C = SparseChunks[Sym.getSectionNumber()]) {
@@ -208,7 +209,7 @@ SymbolBody *ObjectFile::createSymbolBody(StringRef Name, COFFSymbolRef Sym,
     }
   }
   if (Chunk *C = SparseChunks[Sym.getSectionNumber()])
-    return new DefinedRegular(this, Name, Sym, C);
+    return new (Alloc) DefinedRegular(this, Name, Sym, C);
   return nullptr;
 }
 
@@ -225,16 +226,16 @@ void ImportFile::readImports() {
     return;
   }
 
-  StringRef Name = Alloc.save(StringRef(Buf + sizeof(ImportHeader)));
-  StringRef ImpName = Alloc.save(Twine("__imp_") + Name);
+  StringRef Name = StringAlloc.save(StringRef(Buf + sizeof(ImportHeader)));
+  StringRef ImpName = StringAlloc.save(Twine("__imp_") + Name);
   StringRef DLLName(Buf + sizeof(ImportHeader) + Name.size() + 1);
-  auto *ImpSym = new DefinedImportData(DLLName, ImpName, Name);
-  SymbolBodies.push_back(std::unique_ptr<DefinedImportData>(ImpSym));
+  auto *ImpSym = new (Alloc) DefinedImportData(DLLName, ImpName, Name);
+  SymbolBodies.push_back(ImpSym);
 
   uint16_t TypeInfo = read16le(Buf + offsetof(ImportHeader, TypeInfo));
   int Type = TypeInfo & 0x3;
   if (Type == llvm::COFF::IMPORT_CODE)
-    SymbolBodies.push_back(llvm::make_unique<DefinedImportFunc>(Name, ImpSym));
+    SymbolBodies.push_back(new (Alloc) DefinedImportFunc(Name, ImpSym));
 }
 }
 }
