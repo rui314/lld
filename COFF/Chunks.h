@@ -125,7 +125,7 @@ public:
 
   bool isRoot() override;
   void markLive() override;
-  bool isLive() override { return isRoot() || Live; }
+  bool isLive() override { return Live; }
 
   // Adds COMDAT associative sections to this COMDAT section. A chunk
   // and its children are treated as a group by the garbage collector.
