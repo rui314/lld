@@ -36,31 +36,30 @@ This is a list of important data types in this linker.
 * Symbol
 
   Symbol is a pointer to a SymbolBody. There's only one Symbol for
-  each unique symbol name (This uniqueness is guaranteed by the symbol
+  each unique symbol name (this uniqueness is guaranteed by the symbol
   table). Because SymbolBodies are created for each file
   independently, there can be many SymbolBodies for the same
-  name. Thus the relationship between Symbols and SymbolBodies is 1:N.
+  name. Thus, the relationship between Symbols and SymbolBodies is 1:N.
 
-  The resolver keeps the Symbol pointer to always point to the "best"
+  The resolver keeps the Symbol's pointer to always point to the "best"
   SymbolBody. Pointer mutation is the resolve operation in this
   linker.
 
-  SymbolBodies have pointers to Symbols. Only best SymbolBodies are
-  doubly-linked with Symbols. That means you can always find the best
-  SymbolBody from any SymbolBody by following pointers two
-  times. (These pointers make it very easy to find replacements for
-  symbols. For example, if you have an Undefined SymbolBody, you can
-  find a Defined SymbolBody for that symbol just by dereferencing
-  pointers two times, assuming the resolver have successfully resolved
-  all undefined symbols.)
+  SymbolBodies have pointers to their Symbols. That means you can
+  always find the best SymbolBody from any SymbolBody by following
+  pointers twice. This structure makes it very easy to find
+  replacements for symbols. For example, if you have an Undefined
+  SymbolBody, you can find a Defined SymbolBody for that symbol just
+  by going to its Symbol and then to SymbolBody, assuming the resolver
+  have successfully resolved all undefined symbols.
 
 * Chunk
 
   Chunk represents a chunk of data that will occupy space in an
   output. They may be backed by sections of input files, but can be
-  something different, if they are for common or BSS symbols. The
-  linker may also create chunks out of nothing to append additional
-  data to an output.
+  created for something different, if they are for common or BSS
+  symbols. The linker may also create chunks out of nothing to append
+  additional data to an output.
 
   Chunks know about their size, how to copy their data to mmap'ed
   outputs, and how to apply relocations to them. Specifically,
@@ -106,11 +105,11 @@ There are mainly three actors in this linker.
   - processes command line options,
   - creates a symbol table,
   - creates an InputFile for each input file and put all symbols in it
-     into the symbol table,
+    into the symbol table,
   - checks if there's no remaining undefined symbols,
   - creates a writer,
   - and passes the symbol table to the writer to write the result to a
-     file.
+    file.
 
 Performance
 -----------
@@ -119,7 +118,7 @@ Currently it's able to self-host on the Windows platform. It takes 1.2
 seconds to self-host on my Xeon 2580 machine, while the existing
 Atom-based linker takes 5 seconds to self-host. We believe the
 performance difference comes from simplification and optimizations we
-made to the new port. The differences are listed below.
+made to the new port. Notable differences are listed below.
 
 * Reduced number of relocation table reads
 
@@ -144,13 +143,14 @@ made to the new port. The differences are listed below.
   string is linear to the length.)
 
   We look up the symbol table exactly only once for each symbol in the
-  new design. This is achieved by the separation of Symbol and
-  SymbolBody. Once you get a pointer to a Symbol by looking up the
-  symbol table, you can always get the latest symbol resolution result
-  by just dereferencing the pointer. (I'm not sure if the idea is new
-  to the linker. At least, all other linkers I've investigated so far
-  seem to look up hash tables or sets more than once for each new
-  symbol.)
+  new design. This is I believe the minimum possible number. This is
+  achieved by the separation of Symbol and SymbolBody. Once you get a
+  pointer to a Symbol by looking up the symbol table, you can always
+  get the latest symbol resolution result by just dereferencing a
+  pointer. (I'm not sure if the idea is new to the linker. At least,
+  all other linkers I've investigated so far seem to look up hash
+  tables or sets more than once for each new symbol, but I may be
+  wrong.)
 
 * Reduced number of file visits
 
@@ -170,26 +170,25 @@ made to the new port. The differences are listed below.
   The data structures described in the previous section are all thin
   wrappers for classes that LLVM libObject provides. We avoid copying
   data from libObject's objects to our objects. We read much less data
-  than before. For example, we don't read symbol's value until we
-  apply relocations because symbol offsets in sections are not
-  relevant to symbol resolution. Again, COMDAT symbols may be
-  discarded during symbol resolution, so reading their attributes too
-  early could result in a waste. We use underlying objects directly
-  where doing so makes sense.
+  than before. For example, we don't read symbol values until we apply
+  relocations because these values are not relevant to symbol
+  resolution. Again, COMDAT symbols may be discarded during symbol
+  resolution, so reading their attributes too early could result in a
+  waste. We use underlying objects directly where doing so makes
+  sense.
 
 Parallelism
 -----------
 
 The abovementioned data structures are also chosen with
-multi-threading in mind. It is relatively easy to make the symbol
-table a concurrent hash map, so that we let multiple workers read
-files and put symbols into the symbol table concurrently. Symbol
-resolution in this design is a single pointer mutation, which allows
-the resolver work concurrently in a lock-free manner using atomic
-pointer compare-and-swap.
+multi-threading in mind. It should relatively be easy to make the
+symbol table a concurrent hash map, so that we let multiple workers
+work on symbol table concurrently. Symbol resolution in this design is
+a single pointer mutation, which allows the resolver work concurrently
+in a lock-free manner using atomic pointer compare-and-swap.
 
-It is also easy to apply relocations and write chunks concurrently.
+It should also be easy to apply relocations and write chunks concurrently.
 
 We created an experimental multi-threaded linker using the Microsoft
 ConcRT concurrency library, and it was able to link itself in 0.5
-seconds, so we believe the design was proved to work.
+seconds, so we think the design is promising.
