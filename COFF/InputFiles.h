@@ -83,7 +83,7 @@ private:
   std::unique_ptr<MemoryBuffer> MB;
   std::vector<SymbolBody *> SymbolBodies;
   std::set<const char *> Seen;
-  llvm::BumpPtrAllocator Alloc;
+  llvm::MallocAllocator Alloc;
 };
 
 // .obj or .o file. This may be a member of an archive file.

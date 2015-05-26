@@ -207,7 +207,7 @@ class LookupChunk : public Chunk {
 public:
   explicit LookupChunk(HintNameChunk *H) : HintName(H) {}
   bool hasData() const override { return false; }
-  size_t getSize() const override { return 8; }
+  size_t getSize() const override { return sizeof(uint64_t); }
   void applyRelocations(uint8_t *Buf) override;
   HintNameChunk *HintName;
 };

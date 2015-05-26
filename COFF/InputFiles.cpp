@@ -56,12 +56,18 @@ std::error_code ArchiveFile::parse() {
     return EC;
   File = std::move(ArchiveOrErr.get());
 
-  // Read the symbol table to construct CanBeDefined symbols.
+  // Allocate a buffer for CanBeDefined objects.
+  size_t BufSize = File->getNumberOfSymbols() * sizeof(CanBeDefined);
+  CanBeDefined *Buf =
+      (CanBeDefined *)Alloc.Allocate(BufSize, llvm::alignOf<CanBeDefined>());
+
+  // Read the symbol table to construct CanBeDefined objects.
+  uint32_t I = 0;
   for (const Archive::Symbol &Sym : File->symbols()) {
     // Skip special symbol exists in import library files.
     if (Sym.getName() == "__NULL_IMPORT_DESCRIPTOR")
       continue;
-    SymbolBodies.push_back(new (Alloc) CanBeDefined(this, Sym));
+    SymbolBodies.push_back(new (&Buf[I++]) CanBeDefined(this, Sym));
   }
   return std::error_code();
 }

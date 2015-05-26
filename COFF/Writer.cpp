@@ -169,7 +169,7 @@ void Writer::createImportTables() {
   for (ImportTable &T : Tabs) {
     for (LookupChunk *C : T.LookupTables)
       Idata->addChunk(C);
-    Idata->addChunk(new NullChunk(8));
+    Idata->addChunk(new NullChunk(sizeof(uint64_t)));
   }
 
   // Add the import address tables. Their contents are the same as the
@@ -177,7 +177,7 @@ void Writer::createImportTables() {
   for (ImportTable &T : Tabs) {
     for (LookupChunk *C : T.AddressTables)
       Idata->addChunk(C);
-    Idata->addChunk(new NullChunk(8));
+    Idata->addChunk(new NullChunk(sizeof(uint64_t)));
     ImportAddressTableSize += (T.AddressTables.size() + 1) * 8;
   }
   ImportAddressTable = Tabs[0].AddressTables[0];
