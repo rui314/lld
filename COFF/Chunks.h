@@ -77,7 +77,7 @@ public:
   // in a final output. It's supposed to print out a log message. It
   // is illegal to call this function on non-section chunks because
   // only section chunks are subject of garbage collection.
-  virtual void printDiscardMessage() { llvm_unreachable("internal error"); }
+  virtual void printDiscardedMessage() { llvm_unreachable("internal error"); }
 
   // Returns true if this is a COMDAT section. Usually, it is an error
   // if there are more than one defined symbols having the same name,
@@ -120,7 +120,7 @@ public:
   bool hasData() const override;
   uint32_t getPermissions() const override;
   StringRef getSectionName() const override { return SectionName; }
-  void printDiscardMessage() override;
+  void printDiscardedMessage() override;
   bool isCOMDAT() const override;
 
   bool isRoot() override;

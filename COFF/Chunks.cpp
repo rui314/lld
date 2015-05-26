@@ -126,7 +126,7 @@ bool SectionChunk::isCOMDAT() const {
 }
 
 // Prints "Discarded <symbol>" for all external function symbols.
-void SectionChunk::printDiscardMessage() {
+void SectionChunk::printDiscardedMessage() {
   uint32_t E = File->getCOFFObj()->getNumberOfSymbols();
   for (uint32_t I = 0; I < E; ++I) {
     auto SrefOrErr = File->getCOFFObj()->getSymbol(I);

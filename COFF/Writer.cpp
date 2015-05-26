@@ -89,7 +89,7 @@ void Writer::createSections() {
   for (Chunk *C : Symtab->getChunks()) {
     if (!C->isLive()) {
       if (Config->Verbose)
-        C->printDiscardMessage();
+        C->printDiscardedMessage();
       continue;
     }
     // '$' and all following characters in input section names are
