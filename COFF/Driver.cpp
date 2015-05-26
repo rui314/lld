@@ -208,8 +208,14 @@ bool link(int Argc, const char *Argv[]) {
   }
   std::unique_ptr<llvm::opt::InputArgList> Args = std::move(ArgsOrErr.get());
 
+  if (Args->filtered_begin(OPT_INPUT) == Args->filtered_end()) {
+    llvm::errs() << "no input files.\n";
+    return false;
+  }
   if (Args->hasArg(OPT_verbose))
     Config->Verbose = true;
+  if (auto *Arg = Args->getLastArg(OPT_entry))
+    Config->EntryName = Arg->getValue();
 
   // Parse all input files and put all symbols to the symbol table.
   // The symbol table will take care of name resolution.
