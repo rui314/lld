@@ -51,6 +51,9 @@ void OutputSection::setRVA(uint64_t RVA) {
 }
 
 void OutputSection::setFileOffset(uint64_t Off) {
+  // If a section has no actual data (i.e. BSS section), we want to
+  // set 0 to its PointerToRawData. Otherwise the output is rejected
+  // by the loader.
   if (Header.SizeOfRawData == 0)
     return;
   Header.PointerToRawData = Off;
@@ -74,8 +77,6 @@ void OutputSection::addPermissions(uint32_t C) {
   Header.Characteristics = Header.Characteristics | (C & PermMask);
 }
 
-static StringRef dropDollar(StringRef S) { return S.substr(0, S.find('$')); }
-
 void Writer::markLive() {
   Entry = cast<Defined>(Symtab->find(Config->EntryName));
   Entry->markLive();
@@ -95,7 +96,7 @@ void Writer::createSections() {
     // '$' and all following characters in input section names are
     // discarded when determining output section. So, .text$foo
     // contributes to .text, for example. See PE/COFF spec 3.2.
-    Map[dropDollar(C->getSectionName())].push_back(C);
+    Map[C->getSectionName().split('$').first].push_back(C);
   }
 
   // Input sections are ordered by their names including '$' parts,
@@ -131,7 +132,7 @@ std::map<StringRef, std::vector<DefinedImportData *>> Writer::binImports() {
       }
       // Linker-created function thunks for DLL symbols are added to
       // .text section.
-      Text->addChunk(cast<DefinedImportFunc>(B)->getChunk());
+      Text->addChunk(cast<DefinedImportThunk>(B)->getChunk());
     }
   }
 

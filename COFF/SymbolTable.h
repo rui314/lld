@@ -19,16 +19,15 @@ namespace lld {
 namespace coff {
 
 // SymbolTable is a bucket of all known symbols, including defined,
-// undefined, or can-be-defined symbols (the last one is symbols in
-// archive files whose archive members are not yet loaded).
+// undefined, or lazy symbols (the last one is symbols in archive
+// files whose archive members are not yet loaded).
 //
 // We put all symbols of all files to a SymbolTable, and the
 // SymbolTable selects the "best" symbols if there are name
 // conflicts. For example, obviously, a defined symbol is better than
-// an undefined symbol. Or, if there's a conflict between a
-// can-be-defined and a undefined, it'll read an archive member to
-// read a real definition to replace the can-be-defined symbol. The
-// logic is implemented in resolve().
+// an undefined symbol. Or, if there's a conflict between a lazy and a
+// undefined, it'll read an archive member to read a real definition
+// to replace the lazy symbol. The logic is implemented in resolve().
 class SymbolTable {
 public:
   SymbolTable();
@@ -60,7 +59,7 @@ private:
   std::error_code addImport(ImportFile *File);
 
   std::error_code resolve(SymbolBody *Body);
-  std::error_code addMemberFile(CanBeDefined *Body);
+  std::error_code addMemberFile(Lazy *Body);
   void addInitialSymbol(SymbolBody *Body);
 
   std::unordered_map<StringRef, Symbol *> Symtab;

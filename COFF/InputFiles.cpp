@@ -28,19 +28,21 @@ using llvm::sys::fs::file_magic;
 namespace lld {
 namespace coff {
 
-static StringRef basename(StringRef Path) {
+// Returns the last element of a path, which is supposed to be a filename.
+static StringRef getBasename(StringRef Path) {
   size_t Pos = Path.rfind('\\');
   if (Pos == StringRef::npos)
     return Path;
   return Path.substr(Pos + 1);
 }
 
+// Returns a string in the format of "foo.obj" or "foo.obj(bar.lib)".
 std::string InputFile::getShortName() {
-  StringRef Name = getName();
   if (ParentName == "")
-    return Name.lower();
-  return StringRef((basename(ParentName) + "(" + basename(Name) + ")").str())
-      .lower();
+    return getName().lower();
+  std::string Res = (getBasename(ParentName) + "(" +
+                     getBasename(getName()) + ")").str();
+  return StringRef(Res).lower();
 }
 
 std::error_code ArchiveFile::parse() {
@@ -56,18 +58,17 @@ std::error_code ArchiveFile::parse() {
     return EC;
   File = std::move(ArchiveOrErr.get());
 
-  // Allocate a buffer for CanBeDefined objects.
-  size_t BufSize = File->getNumberOfSymbols() * sizeof(CanBeDefined);
-  CanBeDefined *Buf =
-      (CanBeDefined *)Alloc.Allocate(BufSize, llvm::alignOf<CanBeDefined>());
+  // Allocate a buffer for Lazy objects.
+  size_t BufSize = File->getNumberOfSymbols() * sizeof(Lazy);
+  Lazy *Buf = (Lazy *)Alloc.Allocate(BufSize, llvm::alignOf<Lazy>());
 
-  // Read the symbol table to construct CanBeDefined objects.
+  // Read the symbol table to construct Lazy objects.
   uint32_t I = 0;
   for (const Archive::Symbol &Sym : File->symbols()) {
     // Skip special symbol exists in import library files.
     if (Sym.getName() == "__NULL_IMPORT_DESCRIPTOR")
       continue;
-    SymbolBodies.push_back(new (&Buf[I++]) CanBeDefined(this, Sym));
+    SymbolBodies.push_back(new (&Buf[I++]) Lazy(this, Sym));
   }
   return std::error_code();
 }
@@ -202,6 +203,7 @@ SymbolBody *ObjectFile::createSymbolBody(StringRef Name, COFFSymbolRef Sym,
   }
   if (Sym.isAbsolute())
     return new (Alloc) DefinedAbsolute(Name, Sym.getValue());
+  // TODO: Handle IMAGE_WEAK_EXTERN_SEARCH_ALIAS
   if (Sym.isWeakExternal()) {
     auto *Aux = (const coff_aux_weak_external *)AuxP;
     return new (Alloc) Undefined(Name, &SparseSymbolBodies[Aux->TagIndex]);
@@ -240,7 +242,7 @@ std::error_code ImportFile::parse() {
   uint16_t TypeInfo = read16le(Buf + offsetof(ImportHeader, TypeInfo));
   int Type = TypeInfo & 0x3;
   if (Type == llvm::COFF::IMPORT_CODE)
-    SymbolBodies.push_back(new (Alloc) DefinedImportFunc(Name, ImpSym));
+    SymbolBodies.push_back(new (Alloc) DefinedImportThunk(Name, ImpSym));
   return std::error_code();
 }
 }

@@ -118,17 +118,17 @@ std::error_code SymbolTable::resolve(SymbolBody *New) {
   if (comp == 0)
     return make_dynamic_error_code(Twine("duplicate symbol: ") + Name);
 
-  // If we have an Undefined symbol for a CanBeDefined symbol, we need
-  // to read an archive member to replace the CanBeDefined symbol with
+  // If we have an Undefined symbol for a Lazy symbol, we need
+  // to read an archive member to replace the Lazy symbol with
   // a Defined symbol.
   if (isa<Undefined>(Existing) || isa<Undefined>(New))
-    if (auto *B = dyn_cast<CanBeDefined>(Sym->Body))
+    if (auto *B = dyn_cast<Lazy>(Sym->Body))
       return addMemberFile(B);
   return std::error_code();
 }
 
 // Reads an archive member file pointed by a given symbol.
-std::error_code SymbolTable::addMemberFile(CanBeDefined *Body) {
+std::error_code SymbolTable::addMemberFile(Lazy *Body) {
   auto FileOrErr = Body->getMember();
   if (auto EC = FileOrErr.getError())
     return EC;

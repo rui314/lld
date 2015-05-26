@@ -73,7 +73,7 @@ public:
   // (So that we don't instantiate same members more than once.)
   ErrorOr<MemoryBufferRef> getMember(const Archive::Symbol *Sym);
 
-  // NB: All symbols returned by ArchiveFiles are of CanBeDefined type.
+  // NB: All symbols returned by ArchiveFiles are of Lazy type.
   std::vector<SymbolBody *> &getSymbols() override { return SymbolBodies; }
 
 private:

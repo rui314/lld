@@ -3,11 +3,11 @@ The New PE/COFF Linker
 
 This directory contains an experimental linker for the PE/COFF file
 format. Because the fundamental design of this port is different from
-the other ports of the LLD, this port is separated to this directory.
+the other ports of LLD, this port is separated to this directory.
 
 The other ports are based on the Atom model, in which symbols and
 references are represented as vertices and edges of graphs. The port
-in this directory is on the other hand based on sections. The aim is
+in this directory is based on sections instead. The aim is
 simplicity and better performance. Our plan is to implement a linker
 for the PE/COFF format based on a different idea, and then apply the
 same idea to the ELF if proved to be effective.
@@ -24,14 +24,13 @@ This is a list of important data types in this linker.
   them out of nothing.
 
   There are mainly three types of SymbolBodies: Defined, Undefined, or
-  CanBeDefined. Defined symbols are for all symbols that are
-  considered as "resolved", including real defined symbols, COMDAT
-  symbols, common symbols, absolute symbols, linker-created symbols,
-  etc. Undefined symbols are for undefined symbols, which need to be
-  replaced by Defined symbols by the resolver. CanBeDefined symbols
-  represent symbols we found in archive file headers -- which can
-  turn into Defined symbols if we read archieve members, but we
-  haven't done that yet.
+  Lazy. Defined symbols are for all symbols that are considered as
+  "resolved", including real defined symbols, COMDAT symbols, common
+  symbols, absolute symbols, linker-created symbols, etc. Undefined
+  symbols are for undefined symbols, which need to be replaced by
+  Defined symbols by the resolver. Lazy symbols represent symbols we
+  found in archive file headers -- which can turn into Defined symbols
+  if we read archieve members, but we haven't done that yet.
 
 * Symbol
 
@@ -71,15 +70,14 @@ This is a list of important data types in this linker.
   SymbolTable is basically a hash table from strings to Symbols, with
   a logic to resolve symbol conflicts. It resolves conflicts by symbol
   type. For example, if we add Undefined and Defined symbols, the
-  symbol table will keep the latter. If we add Undefined and
-  CanBeDefined symbols, it will keep the latter. If we add
-  CanBeDefined and Undefined, it will keep the former, but it will
-  also trigger the CanBeDefined symbol to load the archive member to
-  actually resolve the symbol.
+  symbol table will keep the latter. If we add Undefined and Lazy
+  symbols, it will keep the latter. If we add Lazy and Undefined, it
+  will keep the former, but it will also trigger the Lazy symbol to
+  load the archive member to actually resolve the symbol.
 
 * OutputSection
 
-  OutputSection is a container of Chunks. A Chunk belong to at most
+  OutputSection is a container of Chunks. A Chunk belongs to at most
   one OutputSection.
 
 There are mainly three actors in this linker.

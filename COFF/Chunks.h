@@ -174,17 +174,17 @@ private:
 // Windows-specific. You may need to read the Microsoft PE/COFF spec
 // to understand details about the data structures.
 
-static const uint8_t ImportFuncData[] = {
+static const uint8_t ImportThunkData[] = {
     0xff, 0x25, 0x00, 0x00, 0x00, 0x00, // JMP *0x0
 };
 
 // A chunk for DLL import jump table entry. In a final output, it's
 // contents will be a JMP instruction to some __imp_ symbol.
-class ImportFuncChunk : public Chunk {
+class ImportThunkChunk : public Chunk {
 public:
-  explicit ImportFuncChunk(Defined *S) : ImpSymbol(S) {}
-  const uint8_t *getData() const override { return ImportFuncData; }
-  size_t getSize() const override { return sizeof(ImportFuncData); }
+  explicit ImportThunkChunk(Defined *S) : ImpSymbol(S) {}
+  const uint8_t *getData() const override { return ImportThunkData; }
+  size_t getSize() const override { return sizeof(ImportThunkData); }
   void applyRelocations(uint8_t *Buf) override;
 
 private:

@@ -42,12 +42,14 @@ struct Symbol {
 class SymbolBody {
 public:
   enum Kind {
+    DefinedFirst,
     DefinedRegularKind,
     DefinedAbsoluteKind,
     DefinedImportDataKind,
-    DefinedImportFuncKind,
+    DefinedImportThunkKind,
+    DefinedLast,
     UndefinedKind,
-    CanBeDefinedKind,
+    LazyKind,
   };
 
   Kind kind() const { return SymbolKind; }
@@ -90,7 +92,7 @@ public:
 
   static bool classof(const SymbolBody *S) {
     Kind K = S->kind();
-    return DefinedRegularKind <= K && K <= DefinedImportFuncKind;
+    return DefinedFirst <= K && K <= DefinedLast;
   }
 
   // Returns the RVA (relative virtual address) of this symbol. The
@@ -180,16 +182,14 @@ private:
 // This class represents a symbol defined in an archive file. It is
 // created from an archive file header, and it knows how to load an
 // object file from an archive to replace itself with a defined
-// symbol. If the resolver finds both Undefined and CanBeDefined for
-// the same name, it will ask the CanBeDefined to load a file.
-class CanBeDefined : public SymbolBody {
+// symbol. If the resolver finds both Undefined and Lazy for
+// the same name, it will ask the Lazy to load a file.
+class Lazy : public SymbolBody {
 public:
-  CanBeDefined(ArchiveFile *F, const Archive::Symbol S)
-      : SymbolBody(CanBeDefinedKind, S.getName()), File(F), Sym(S) {}
+  Lazy(ArchiveFile *F, const Archive::Symbol S)
+      : SymbolBody(LazyKind, S.getName()), File(F), Sym(S) {}
 
-  static bool classof(const SymbolBody *S) {
-    return S->kind() == CanBeDefinedKind;
-  }
+  static bool classof(const SymbolBody *S) { return S->kind() == LazyKind; }
 
   // Returns an object file for this symbol, or a nullptr if the file
   // was already returned.
@@ -231,13 +231,13 @@ private:
 // without "__imp_" prefix for all function symbols exported from
 // DLLs, so that you can call DLL functions as regular functions with
 // a regular name. A function pointer is given as a DefinedImportData.
-class DefinedImportFunc : public Defined {
+class DefinedImportThunk : public Defined {
 public:
-  DefinedImportFunc(StringRef Name, DefinedImportData *S)
-      : Defined(DefinedImportFuncKind, Name), Data(S) {}
+  DefinedImportThunk(StringRef Name, DefinedImportData *S)
+      : Defined(DefinedImportThunkKind, Name), Data(S) {}
 
   static bool classof(const SymbolBody *S) {
-    return S->kind() == DefinedImportFuncKind;
+    return S->kind() == DefinedImportThunkKind;
   }
 
   uint64_t getRVA() override { return Data.getRVA(); }
@@ -246,7 +246,7 @@ public:
 
 private:
   DefinedImportData *ImpSymbol;
-  ImportFuncChunk Data;
+  ImportThunkChunk Data;
 };
 
 } // namespace coff
