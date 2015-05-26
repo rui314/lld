@@ -63,7 +63,7 @@ private:
   std::error_code addMemberFile(CanBeDefined *Body);
   void addInitialSymbol(SymbolBody *Body);
 
-  std::unordered_map<llvm::StringRef, Symbol *> Symtab;
+  std::unordered_map<StringRef, Symbol *> Symtab;
   std::vector<std::unique_ptr<ObjectFile>> ObjectFiles;
   std::vector<std::unique_ptr<ArchiveFile>> ArchiveFiles;
   std::vector<std::unique_ptr<SymbolBody>> OwnedSymbols;

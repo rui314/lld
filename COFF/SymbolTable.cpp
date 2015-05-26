@@ -105,17 +105,12 @@ bool SymbolTable::reportRemainingUndefines() {
 std::error_code SymbolTable::resolve(SymbolBody *New) {
   // Find an existing Symbol or create and insert a new one.
   StringRef Name = New->getName();
-  auto It = Symtab.find(Name);
-  if (It == Symtab.end()) {
-    auto *NewSym = new (Alloc) Symbol(New);
-    It = Symtab.insert(It, std::make_pair(Name, NewSym));
-    // If this key is new, no need to resolve.
-    if (It->second == NewSym) {
-      New->setBackref(NewSym);
-      return std::error_code();
-    }
+  Symbol *&Sym = Symtab[Name];
+  if (!Sym) {
+    Sym = new (Alloc) Symbol(New);
+    New->setBackref(Sym);
+    return std::error_code();
   }
-  Symbol *Sym = It->second;
   New->setBackref(Sym);
 
   // compare() returns -1, 0, or 1 if the lhs symbol is less preferable,

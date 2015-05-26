@@ -165,7 +165,7 @@ made to the new port. The differences are listed below.
   archive files many times if there are circular dependencies between
   archives.
 
-* Avoid creating additional objects and copying data
+* Avoiding creating additional objects or copying data
 
   The data structures described in the previous section are all thin
   wrappers for classes that LLVM libObject provides. We avoid copying
