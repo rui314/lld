@@ -30,7 +30,7 @@ const uint32_t PermMask = 0xF00000F0;
 // non-overlapping file offsets and RVAs.
 class OutputSection {
 public:
-  OutputSection(StringRef Nam, uint32_t SectionIndex);
+  OutputSection(StringRef Name, uint32_t SectionIndex);
   void setRVA(uint64_t);
   void setFileOffset(uint64_t);
   void addChunk(Chunk *C);

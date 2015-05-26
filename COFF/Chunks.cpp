@@ -176,7 +176,7 @@ void LookupChunk::applyRelocations(uint8_t *Buf) {
 }
 
 void DirectoryChunk::applyRelocations(uint8_t *Buf) {
-  auto *E = (llvm::COFF::ImportDirectoryTableEntry *)(Buf + FileOff);
+  auto *E = (coff_import_directory_table_entry *)(Buf + FileOff);
   E->ImportLookupTableRVA = LookupTab->getRVA();
   E->NameRVA = DLLName->getRVA();
   E->ImportAddressTableRVA = AddressTab->getRVA();
@@ -200,5 +200,6 @@ ImportTable::ImportTable(StringRef N,
   DirTab->LookupTab = LookupTables[0];
   DirTab->AddressTab = AddressTables[0];
 }
-}
-}
+
+} // namespace coff
+} // namespace lld
