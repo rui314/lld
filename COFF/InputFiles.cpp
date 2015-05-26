@@ -200,9 +200,8 @@ SymbolBody *ObjectFile::createSymbolBody(StringRef Name, COFFSymbolRef Sym,
     Chunks.push_back(C);
     return new (Alloc) DefinedRegular(this, Name, Sym, C);
   }
-  if (Sym.getSectionNumber() == -1) {
+  if (Sym.isAbsolute())
     return new (Alloc) DefinedAbsolute(Name, Sym.getValue());
-  }
   if (Sym.isWeakExternal()) {
     auto *Aux = (const coff_aux_weak_external *)AuxP;
     return new (Alloc) Undefined(Name, &SparseSymbolBodies[Aux->TagIndex]);
