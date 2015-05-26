@@ -89,6 +89,7 @@ private:
   std::unique_ptr<llvm::FileOutputBuffer> Buffer;
   std::vector<std::unique_ptr<OutputSection>> OutputSections;
   Chunk *ImportAddressTable = nullptr;
+  uint32_t ImportDirectoryTableSize = 0;
   uint32_t ImportAddressTableSize = 0;
 
   Defined *Entry;

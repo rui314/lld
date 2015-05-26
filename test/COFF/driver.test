@@ -2,4 +2,4 @@
 # RUN: FileCheck -check-prefix=MISSING %s < %t.log
 MISSING: nosuchfile.obj: no such file or directory
 
-# RUN: lld -flavor link2 /entry:main %p/Inputs/ret42.obj
+# RUN: lld -flavor link2 /entry:main /out:%t.exe %p/Inputs/ret42.obj

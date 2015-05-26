@@ -164,6 +164,7 @@ void Writer::createImportTables() {
   for (ImportTable &T : Tabs)
     Idata->addChunk(T.DirTab);
   Idata->addChunk(new NullChunk(sizeof(ImportDirectoryTableEntry)));
+  ImportDirectoryTableSize = (Tabs.size() + 1) * sizeof(ImportDirectoryTableEntry);
 
   // Add the import lookup tables.
   for (ImportTable &T : Tabs) {
@@ -178,7 +179,7 @@ void Writer::createImportTables() {
     for (LookupChunk *C : T.AddressTables)
       Idata->addChunk(C);
     Idata->addChunk(new NullChunk(sizeof(uint64_t)));
-    ImportAddressTableSize += (T.AddressTables.size() + 1) * 8;
+    ImportAddressTableSize += (T.AddressTables.size() + 1) * sizeof(uint64_t);
   }
   ImportAddressTable = Tabs[0].AddressTables[0];
 
@@ -227,21 +228,21 @@ void Writer::assignAddresses() {
 
 void Writer::writeHeader() {
   // Write DOS stub
-  uint8_t *P = Buffer->getBufferStart();
-  auto *DOS = reinterpret_cast<dos_header *>(P);
-  P += DOSStubSize;
+  uint8_t *Buf = Buffer->getBufferStart();
+  auto *DOS = reinterpret_cast<dos_header *>(Buf);
+  Buf += DOSStubSize;
   DOS->Magic[0] = 'M';
   DOS->Magic[1] = 'Z';
   DOS->AddressOfRelocationTable = sizeof(dos_header);
   DOS->AddressOfNewExeHeader = DOSStubSize;
 
   // Write PE magic
-  memcpy(P, PEMagic, sizeof(PEMagic));
-  P += sizeof(PEMagic);
+  memcpy(Buf, PEMagic, sizeof(PEMagic));
+  Buf += sizeof(PEMagic);
 
   // Write COFF header
-  coff_file_header *COFF = reinterpret_cast<coff_file_header *>(P);
-  P += sizeof(coff_file_header);
+  coff_file_header *COFF = reinterpret_cast<coff_file_header *>(Buf);
+  Buf += sizeof(coff_file_header);
   COFF->Machine = IMAGE_FILE_MACHINE_AMD64;
   COFF->NumberOfSections = OutputSections.size();
   COFF->Characteristics =
@@ -251,8 +252,8 @@ void Writer::writeHeader() {
       sizeof(pe32plus_header) + sizeof(data_directory) * NumberfOfDataDirectory;
 
   // Write PE header
-  pe32plus_header *PE = reinterpret_cast<pe32plus_header *>(P);
-  P += sizeof(pe32plus_header);
+  pe32plus_header *PE = reinterpret_cast<pe32plus_header *>(Buf);
+  Buf += sizeof(pe32plus_header);
   PE->Magic = PE32Header::PE32_PLUS;
   PE->ImageBase = Config->ImageBase;
   PE->SectionAlignment = SectionAlignment;
@@ -275,18 +276,18 @@ void Writer::writeHeader() {
   PE->SizeOfInitializedData = getSizeOfInitializedData();
 
   // Write data directory
-  data_directory *DataDirectory = reinterpret_cast<data_directory *>(P);
-  P += sizeof(data_directory) * NumberfOfDataDirectory;
+  data_directory *DataDirectory = reinterpret_cast<data_directory *>(Buf);
+  Buf += sizeof(data_directory) * NumberfOfDataDirectory;
   if (OutputSection *Idata = findSection(".idata")) {
     using namespace llvm::COFF;
     DataDirectory[IMPORT_TABLE].RelativeVirtualAddress = Idata->getRVA();
-    DataDirectory[IMPORT_TABLE].Size = Idata->getVirtualSize();
+    DataDirectory[IMPORT_TABLE].Size = ImportDirectoryTableSize;
     DataDirectory[IAT].RelativeVirtualAddress = ImportAddressTable->getRVA();
     DataDirectory[IAT].Size = ImportAddressTableSize;
   }
 
   // Write section table
-  coff_section *SectionTable = reinterpret_cast<coff_section *>(P);
+  coff_section *SectionTable = reinterpret_cast<coff_section *>(Buf);
   int Idx = 0;
   for (std::unique_ptr<OutputSection> &Out : OutputSections)
     SectionTable[Idx++] = Out->getHeader();
@@ -302,16 +303,16 @@ std::error_code Writer::openFile(StringRef Path) {
 
 // Write section contents to a mmap'ed file.
 void Writer::writeSections() {
-  uint8_t *P = Buffer->getBufferStart();
+  uint8_t *Buf = Buffer->getBufferStart();
   for (std::unique_ptr<OutputSection> &Sec : OutputSections) {
     // Fill gaps between functions in .text with INT3 instructions
     // instead of leaving as NUL bytes (which can be interpreted as
     // ADD instructions).
     if (Sec->getPermissions() & IMAGE_SCN_CNT_CODE)
-      memset(P + Sec->getFileOff(), 0xCC, Sec->getRawSize());
+      memset(Buf + Sec->getFileOff(), 0xCC, Sec->getRawSize());
     for (Chunk *C : Sec->getChunks())
       if (C->hasData())
-        memcpy(P + C->getFileOff(), C->getData(), C->getSize());
+        memcpy(Buf + C->getFileOff(), C->getData(), C->getSize());
   }
 }
 
