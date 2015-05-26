@@ -103,13 +103,13 @@ There are mainly three actors in this linker.
 
   The linking process is drived by the driver. The driver
 
-  1. processes command line options,
-  2. creates a symbol table,
-  3. creates an InputFile for each input file and put all symbols in it
+  - processes command line options,
+  - creates a symbol table,
+  - creates an InputFile for each input file and put all symbols in it
      into the symbol table,
-  4. checks if there's no remaining undefined symbols,
-  5. creates a writer,
-  6. and passes the symbol table to the writer to write the result to a
+  - checks if there's no remaining undefined symbols,
+  - creates a writer,
+  - and passes the symbol table to the writer to write the result to a
      file.
 
 Performance
