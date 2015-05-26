@@ -83,10 +83,6 @@ bool SymbolTable::reportRemainingUndefines() {
     if (!Undef)
       continue;
     if (SymbolBody *Alias = Undef->getWeakAlias()) {
-      // If an Undefined has a fallback, it'll be replaced with the
-      // fallback symbol. The StringBody object the Undefined has may
-      // be stale, so get the latest result by following the back
-      // pointer and then the forward poitner.
       Sym->Body = Alias->getReplacement();
       if (!isa<Defined>(Sym->Body)) {
         llvm::errs() << "undefined symbol: " << Undef->getName() << "\n";

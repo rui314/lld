@@ -68,10 +68,9 @@ public:
   std::error_code parse() override;
   StringRef getName() override { return Name; }
 
-  // Returns a memory buffer for a given symbol. An empty memory
-  // buffer is returned if we have already returned the same memory
-  // buffer. (So that we don't instantiate same members more than
-  // once.)
+  // Returns a memory buffer for a given symbol. An empty memory buffer
+  // is returned if we have already returned the same memory buffer.
+  // (So that we don't instantiate same members more than once.)
   ErrorOr<MemoryBufferRef> getMember(const Archive::Symbol *Sym);
 
   // NB: All symbols returned by ArchiveFiles are of CanBeDefined type.
@@ -123,14 +122,13 @@ private:
   StringRef Directives;
   llvm::BumpPtrAllocator Alloc;
 
-  // List of all chunks defined by this file. The first chunks
-  // represents sections which may be followed by other non-section
-  // chunks such as common symbols.
+  // List of all chunks defined by this file. This includes both section
+  // chunks and non-section chunks for common symbols.
   std::vector<Chunk *> Chunks;
 
   // This vector contains the same chunks as Chunks, but they are
-  // indexed such that you can get a SectionChunk by section
-  // index. Nonexistent section indices are filled with null pointers.
+  // indexed such that you can get a SectionChunk by section index.
+  // Nonexistent section indices are filled with null pointers.
   // (Because section number is 1-based, the first slot is always a
   // null pointer.)
   std::vector<Chunk *> SparseChunks;
@@ -141,7 +139,7 @@ private:
   // This vector contains the same symbols as SymbolBodies, but they
   // are indexed such that you can get a SymbolBody by symbol
   // index. Nonexistent indices (which are occupied by auxiliary
-  // symbols in the real symbol table) are filled by null pointers.
+  // symbols in the real symbol table) are filled with null pointers.
   std::vector<SymbolBody *> SparseSymbolBodies;
 };
 
