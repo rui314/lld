@@ -126,13 +126,26 @@ ErrorOr<MachineTypes> getMachineType(llvm::opt::InputArgList *Args) {
   return make_dynamic_error_code("cannot infer machine type");
 }
 
+// Parses a string in the form of "<integer>[,<integer>]".
 std::error_code parseNumbers(StringRef Arg, uint64_t *Addr, uint64_t *Size) {
-  StringRef SA, SS;
-  std::tie(SA, SS) = Arg.split(',');
-  if (SA.getAsInteger(0, *Addr))
-    return make_dynamic_error_code(Twine("invalid number: ") + SA);
-  if (!SS.empty() && SS.getAsInteger(0, *Size))
-    return make_dynamic_error_code(Twine("invalid number: ") + SS);
+  StringRef S1, S2;
+  std::tie(S1, S2) = Arg.split(',');
+  if (S1.getAsInteger(0, *Addr))
+    return make_dynamic_error_code(Twine("invalid number: ") + S1);
+  if (!S2.empty() && S2.getAsInteger(0, *Size))
+    return make_dynamic_error_code(Twine("invalid number: ") + S2);
+  return std::error_code();
+}
+
+// Parses a string in the form of "<integer>[.<integer>]".
+std::error_code parseVersion(StringRef Arg, uint32_t *Major, uint32_t *Minor) {
+  StringRef S1, S2;
+  std::tie(S1, S2) = Arg.split('.');
+  if (S1.getAsInteger(0, *Major))
+    return make_dynamic_error_code(Twine("invalid number: ") + S1);
+  *Minor = 0;
+  if (!S2.empty() && S2.getAsInteger(0, *Minor))
+    return make_dynamic_error_code(Twine("invalid number: ") + S2);
   return std::error_code();
 }
 

@@ -137,6 +137,12 @@ static std::error_code doLink(int Argc, const char *Argv[]) {
                                &Config->HeapCommit))
       return make_dynamic_error_code(Twine("/heap: ") + EC.message());
 
+  // Handle /version
+  if (auto *Arg = Args->getLastArg(OPT_version))
+    if (auto EC = parseVersion(Arg->getValue(), &Config->MajorImageVersion,
+                               &Config->MinorImageVersion))
+      return make_dynamic_error_code(Twine("/version: ") + EC.message());
+
   // Parse all input files and put all symbols to the symbol table.
   // The symbol table will take care of name resolution.
   SymbolTable Symtab;
