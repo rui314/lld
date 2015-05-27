@@ -16,6 +16,7 @@
 #include "lld/Core/Error.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
@@ -29,6 +30,7 @@
 #include <memory>
 
 using namespace llvm;
+using llvm::COFF::MachineTypes;
 
 // Create enum with OPT_xxx values for each option in Options.td
 enum {
@@ -198,6 +200,14 @@ std::error_code parseDirectives(StringRef S,
   return std::error_code();
 }
 
+static MachineTypes parseMachineType(StringRef S) {
+  return llvm::StringSwitch<MachineTypes>(S.lower())
+    .Case("arm", llvm::COFF::IMAGE_FILE_MACHINE_ARMNT)
+    .Case("x64", llvm::COFF::IMAGE_FILE_MACHINE_AMD64)
+    .Case("x86", llvm::COFF::IMAGE_FILE_MACHINE_I386)
+    .Default(llvm::COFF::IMAGE_FILE_MACHINE_UNKNOWN);
+}
+
 bool link(int Argc, const char *Argv[]) {
   // Parse command line options.
   Config = new Configuration();
@@ -208,14 +218,34 @@ bool link(int Argc, const char *Argv[]) {
   }
   std::unique_ptr<llvm::opt::InputArgList> Args = std::move(ArgsOrErr.get());
 
+  // Handle /help
+  if (Args->hasArg(OPT_help)) {
+    COFFOptTable table;
+    table.PrintHelp(llvm::outs(), Argv[0], "LLVM Linker", false);
+    return false;
+  }
+
   if (Args->filtered_begin(OPT_INPUT) == Args->filtered_end()) {
     llvm::errs() << "no input files.\n";
     return false;
   }
+
+  // Handle /verbose
   if (Args->hasArg(OPT_verbose))
     Config->Verbose = true;
+
+  // Handle /entry
   if (auto *Arg = Args->getLastArg(OPT_entry))
     Config->EntryName = Arg->getValue();
+
+  // Handle /machine
+  if (auto *Arg = Args->getLastArg(OPT_machine)) {
+    Config->MachineType = parseMachineType(Arg->getValue());
+    if (Config->MachineType == llvm::COFF::IMAGE_FILE_MACHINE_UNKNOWN) {
+      llvm::errs() << "unknown machine type: " << Arg->getValue() << "\n";
+      return false;
+    }
+  }
 
   // Parse all input files and put all symbols to the symbol table.
   // The symbol table will take care of name resolution.
