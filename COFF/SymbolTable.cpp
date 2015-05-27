@@ -85,6 +85,8 @@ bool SymbolTable::reportRemainingUndefines() {
     if (SymbolBody *Alias = Undef->getWeakAlias()) {
       Sym->Body = Alias->getReplacement();
       if (!isa<Defined>(Sym->Body)) {
+        // Aliases are yet another symbols pointed by other symbols
+        // that could also remain undefined.
         llvm::errs() << "undefined symbol: " << Undef->getName() << "\n";
         Ret = true;
       }
@@ -162,7 +164,6 @@ SymbolBody *SymbolTable::find(StringRef Name) {
 
 void SymbolTable::dump() {
   for (auto &P : Symtab) {
-    StringRef Name = P.first;
     Symbol *Ref = P.second;
     if (auto *Body = dyn_cast<Defined>(Ref->Body))
       llvm::dbgs() << Twine::utohexstr(Config->ImageBase + Body->getRVA())

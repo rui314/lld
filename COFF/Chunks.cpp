@@ -20,7 +20,6 @@
 
 using namespace llvm::object;
 using namespace llvm::support::endian;
-using llvm::COFF::ImportHeader;
 using llvm::RoundUpToAlignment;
 
 namespace lld {
@@ -131,7 +130,7 @@ void SectionChunk::printDiscardedMessage() {
   for (uint32_t I = 0; I < E; ++I) {
     auto SrefOrErr = File->getCOFFObj()->getSymbol(I);
     COFFSymbolRef Sym = SrefOrErr.get();
-    if (Sym.getSectionNumber() != SectionIndex)
+    if (uint32_t(Sym.getSectionNumber()) != SectionIndex)
       continue;
     if (!Sym.isFunctionDefinition())
       continue;

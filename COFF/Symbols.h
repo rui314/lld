@@ -113,8 +113,8 @@ public:
 // Regular defined symbols read from object file symbol tables.
 class DefinedRegular : public Defined {
 public:
-  DefinedRegular(ObjectFile *F, StringRef Name, COFFSymbolRef S, Chunk *C)
-      : Defined(DefinedRegularKind, Name), File(F), Sym(S), Data(C) {}
+  DefinedRegular(StringRef Name, COFFSymbolRef S, Chunk *C)
+      : Defined(DefinedRegularKind, Name), Sym(S), Data(C) {}
 
   static bool classof(const SymbolBody *S) {
     return S->kind() == DefinedRegularKind;
@@ -131,7 +131,6 @@ public:
   uint32_t getCommonSize() const { return Sym.getValue(); }
 
 private:
-  ObjectFile *File;
   COFFSymbolRef Sym;
   Chunk *Data;
 };
@@ -245,7 +244,6 @@ public:
   Chunk *getChunk() { return &Data; }
 
 private:
-  DefinedImportData *ImpSymbol;
   ImportThunkChunk Data;
 };
 

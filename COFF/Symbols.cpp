@@ -78,16 +78,16 @@ ErrorOr<std::unique_ptr<InputFile>> Lazy::getMember() {
   // getMember returns an empty buffer if the member was already
   // read from the library.
   if (MBRef.getBuffer().empty())
-    return nullptr;
+    return std::unique_ptr<InputFile>(nullptr);
 
   file_magic Magic = identify_magic(MBRef.getBuffer());
   if (Magic == file_magic::coff_import_library)
-    return llvm::make_unique<ImportFile>(MBRef);
+    return std::unique_ptr<InputFile>(new ImportFile(MBRef));
 
   if (Magic != file_magic::coff_object)
     return make_dynamic_error_code("unknown file type");
 
-  std::unique_ptr<ObjectFile> Obj(new ObjectFile(MBRef.getBufferIdentifier(), MBRef));
+  std::unique_ptr<InputFile> Obj(new ObjectFile(MBRef.getBufferIdentifier(), MBRef));
   Obj->setParentName(File->getName());
   return std::move(Obj);
 }

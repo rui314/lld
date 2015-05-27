@@ -199,7 +199,7 @@ SymbolBody *ObjectFile::createSymbolBody(StringRef Name, COFFSymbolRef Sym,
   if (Sym.isCommon()) {
     Chunk *C = new (Alloc) CommonChunk(Sym);
     Chunks.push_back(C);
-    return new (Alloc) DefinedRegular(this, Name, Sym, C);
+    return new (Alloc) DefinedRegular(Name, Sym, C);
   }
   if (Sym.isAbsolute())
     return new (Alloc) DefinedAbsolute(Name, Sym.getValue());
@@ -218,32 +218,34 @@ SymbolBody *ObjectFile::createSymbolBody(StringRef Name, COFFSymbolRef Sym,
     }
   }
   if (Chunk *C = SparseChunks[Sym.getSectionNumber()])
-    return new (Alloc) DefinedRegular(this, Name, Sym, C);
+    return new (Alloc) DefinedRegular(Name, Sym, C);
   return nullptr;
 }
 
 std::error_code ImportFile::parse() {
   const char *Buf = MBRef.getBufferStart();
   const char *End = MBRef.getBufferEnd();
-
-  // The size of the string that follows the header.
-  uint32_t DataSize = read32le(Buf + offsetof(ImportHeader, SizeOfData));
+  const auto *Hdr = reinterpret_cast<const coff_import_header *>(Buf);
 
   // Check if the total size is valid.
-  if (size_t(End - Buf) != sizeof(ImportHeader) + DataSize)
+  if (End - Buf != sizeof(*Hdr) + Hdr->SizeOfData)
     return make_dynamic_error_code("broken import library");
 
-  StringRef Name = StringAlloc.save(StringRef(Buf + sizeof(ImportHeader)));
+  // Read names and create an __imp_ symbol.
+  StringRef Name = StringAlloc.save(StringRef(Buf + sizeof(*Hdr)));
   StringRef ImpName = StringAlloc.save(Twine("__imp_") + Name);
-  StringRef DLLName(Buf + sizeof(ImportHeader) + Name.size() + 1);
+  StringRef DLLName(Buf + sizeof(coff_import_header) + Name.size() + 1);
   auto *ImpSym = new (Alloc) DefinedImportData(DLLName, ImpName, Name);
   SymbolBodies.push_back(ImpSym);
 
-  uint16_t TypeInfo = read16le(Buf + offsetof(ImportHeader, TypeInfo));
-  int Type = TypeInfo & 0x3;
-  if (Type == llvm::COFF::IMPORT_CODE)
+  // If type is function, we need to create a thunk which jump to an
+  // address pointed by the __imp_ symbol we have just created without
+  // __imp_ prefix. (This allows you to call DLL functions just like
+  // regular non-DLL functions.)
+  if (Hdr->getType() == llvm::COFF::IMPORT_CODE)
     SymbolBodies.push_back(new (Alloc) DefinedImportThunk(Name, ImpSym));
   return std::error_code();
 }
-}
-}
+
+} // namespace coff
+} // namespace lld
