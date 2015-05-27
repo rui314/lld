@@ -89,26 +89,22 @@ std::error_code parseDirectives(StringRef S,
   return std::error_code();
 }
 
-bool link(int Argc, const char *Argv[]) {
+static std::error_code doLink(int Argc, const char *Argv[]) {
   // Parse command line options.
   Config = new Configuration();
   auto ArgsOrErr = parseArgs(Argc, Argv);
-  if (auto EC = ArgsOrErr.getError()) {
-    llvm::errs() << EC.message() << "\n";
-    return false;
-  }
+  if (auto EC = ArgsOrErr.getError())
+    return EC;
   std::unique_ptr<llvm::opt::InputArgList> Args = std::move(ArgsOrErr.get());
 
   // Handle /help
   if (Args->hasArg(OPT_help)) {
     printHelp(Argv[0]);
-    return false;
+    return std::error_code();
   }
 
-  if (Args->filtered_begin(OPT_INPUT) == Args->filtered_end()) {
-    llvm::errs() << "no input files.\n";
-    return false;
-  }
+  if (Args->filtered_begin(OPT_INPUT) == Args->filtered_end())
+    return make_dynamic_error_code("no input files.");
 
   // Handle /verbose
   if (Args->hasArg(OPT_verbose))
@@ -120,10 +116,8 @@ bool link(int Argc, const char *Argv[]) {
 
   // Handle /machine
   auto MTOrErr = getMachineType(Args.get());
-  if (auto EC = MTOrErr.getError()) {
-    llvm::errs() << EC.message() << "\n";
-    return false;
-  }
+  if (auto EC = MTOrErr.getError())
+    return EC;
   Config->MachineType = MTOrErr.get();
 
   // Parse all input files and put all symbols to the symbol table.
@@ -133,17 +127,21 @@ bool link(int Argc, const char *Argv[]) {
     std::string Path = findFile(Arg->getValue());
     if (!Config->insertFile(Path))
       continue;
-    if (auto EC = Symtab.addFile(createFile(Path))) {
-      llvm::errs() << Path << ": " << EC.message() << "\n";
-      return false;
-    }
+    if (auto EC = Symtab.addFile(createFile(Path)))
+      return make_dynamic_error_code(Twine(Path) + ": " + EC.message());
   }
   if (Symtab.reportRemainingUndefines())
-    return false;
+    return make_dynamic_error_code("link failed");
 
   // Write the result.
   Writer Out(&Symtab);
-  if (auto EC = Out.write(getOutputPath(Args.get()))) {
+  if (auto EC = Out.write(getOutputPath(Args.get())))
+    return EC;
+  return std::error_code();
+}
+
+bool link(int Argc, const char *Argv[]) {
+  if (auto EC = doLink(Argc, Argv)) {
     llvm::errs() << EC.message() << "\n";
     return false;
   }
