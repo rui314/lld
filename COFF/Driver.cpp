@@ -120,6 +120,14 @@ static std::error_code doLink(int Argc, const char *Argv[]) {
     return EC;
   Config->MachineType = MTOrErr.get();
 
+  // Handle /base
+  if (auto *Arg = Args->getLastArg(OPT_base)) {
+    uint64_t Addr, Size;
+    if (auto EC = parseMemoryOption(Arg->getValue(), &Addr, &Size))
+      return EC;
+    Config->ImageBase = Addr;
+  }
+
   // Parse all input files and put all symbols to the symbol table.
   // The symbol table will take care of name resolution.
   SymbolTable Symtab;

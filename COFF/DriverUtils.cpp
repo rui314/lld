@@ -126,6 +126,17 @@ ErrorOr<MachineTypes> getMachineType(llvm::opt::InputArgList *Args) {
   return make_dynamic_error_code("cannot infer machine type");
 }
 
+std::error_code parseMemoryOption(StringRef Arg, uint64_t *Addr,
+                                  uint64_t *Size) {
+  StringRef SA, SS;
+  std::tie(SA, SS) = Arg.split(',');
+  if (SA.getAsInteger(0, *Addr))
+    return make_dynamic_error_code(Twine("invalid number: ") + SA);
+  if (!SS.empty() && SS.getAsInteger(0, *Size))
+    return make_dynamic_error_code(Twine("invalid number: ") + SS);
+  return std::error_code();
+}
+
 // Create OptTable
 
 // Create prefix string literals used in Options.td
