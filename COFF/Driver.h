@@ -43,8 +43,8 @@ std::string findFile(StringRef Filename);
 ErrorOr<MachineTypes> getMachineType(llvm::opt::InputArgList *Args);
 
 // Parses a string in the form of "<integer>[,<integer>]".
-std::error_code parseMemoryOption(StringRef Arg, uint64_t *Addr,
-                                  uint64_t *Size);
+std::error_code parseNumbers(StringRef Arg, uint64_t *Addr,
+                             uint64_t *Size = nullptr);
 
 void printHelp(const char *Argv0);
 

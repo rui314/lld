@@ -121,12 +121,15 @@ static std::error_code doLink(int Argc, const char *Argv[]) {
   Config->MachineType = MTOrErr.get();
 
   // Handle /base
-  if (auto *Arg = Args->getLastArg(OPT_base)) {
-    uint64_t Addr, Size;
-    if (auto EC = parseMemoryOption(Arg->getValue(), &Addr, &Size))
-      return EC;
-    Config->ImageBase = Addr;
-  }
+  if (auto *Arg = Args->getLastArg(OPT_base))
+    if (auto EC = parseNumbers(Arg->getValue(), &Config->ImageBase))
+      return make_dynamic_error_code(Twine("/base: ") + EC.message());
+
+  // Handle /stack
+  if (auto *Arg = Args->getLastArg(OPT_stack))
+    if (auto EC = parseNumbers(Arg->getValue(), &Config->StackReserve,
+                               &Config->StackCommit))
+      return make_dynamic_error_code(Twine("/stack: ") + EC.message());
 
   // Parse all input files and put all symbols to the symbol table.
   // The symbol table will take care of name resolution.
