@@ -242,8 +242,8 @@ void Writer::writeHeader() {
   Buf += sizeof(PEMagic);
 
   // Write COFF header
-  coff_file_header *COFF = reinterpret_cast<coff_file_header *>(Buf);
-  Buf += sizeof(coff_file_header);
+  auto *COFF = reinterpret_cast<coff_file_header *>(Buf);
+  Buf += sizeof(*COFF);
   COFF->Machine = IMAGE_FILE_MACHINE_AMD64;
   COFF->NumberOfSections = OutputSections.size();
   COFF->Characteristics =
@@ -253,8 +253,8 @@ void Writer::writeHeader() {
       sizeof(pe32plus_header) + sizeof(data_directory) * NumberfOfDataDirectory;
 
   // Write PE header
-  pe32plus_header *PE = reinterpret_cast<pe32plus_header *>(Buf);
-  Buf += sizeof(pe32plus_header);
+  auto *PE = reinterpret_cast<pe32plus_header *>(Buf);
+  Buf += sizeof(*PE);
   PE->Magic = PE32Header::PE32_PLUS;
   PE->ImageBase = Config->ImageBase;
   PE->SectionAlignment = SectionAlignment;
@@ -277,8 +277,8 @@ void Writer::writeHeader() {
   PE->SizeOfInitializedData = getSizeOfInitializedData();
 
   // Write data directory
-  data_directory *DataDirectory = reinterpret_cast<data_directory *>(Buf);
-  Buf += sizeof(data_directory) * NumberfOfDataDirectory;
+  auto *DataDirectory = reinterpret_cast<data_directory *>(Buf);
+  Buf += sizeof(*DataDirectory) * NumberfOfDataDirectory;
   if (OutputSection *Idata = findSection(".idata")) {
     using namespace llvm::COFF;
     DataDirectory[IMPORT_TABLE].RelativeVirtualAddress = Idata->getRVA();
@@ -290,8 +290,8 @@ void Writer::writeHeader() {
   // Write section table
   coff_section *SectionTable = reinterpret_cast<coff_section *>(Buf);
   int Idx = 0;
-  for (std::unique_ptr<OutputSection> &Out : OutputSections)
-    SectionTable[Idx++] = Out->getHeader();
+  for (std::unique_ptr<OutputSection> &Sec : OutputSections)
+    SectionTable[Idx++] = Sec->getHeader();
 }
 
 std::error_code Writer::openFile(StringRef Path) {

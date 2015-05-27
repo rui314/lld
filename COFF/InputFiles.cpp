@@ -85,11 +85,7 @@ ErrorOr<MemoryBufferRef> ArchiveFile::getMember(const Archive::Symbol *Sym) {
   auto Pair = Seen.insert(StartAddr);
   if (!Pair.second)
     return MemoryBufferRef();
-
-  auto MBRefOrErr = It->getMemoryBufferRef();
-  if (auto EC = MBRefOrErr.getError())
-    return EC;
-  return MBRefOrErr.get();
+  return It->getMemoryBufferRef();
 }
 
 std::error_code ObjectFile::parse() {
@@ -115,9 +111,7 @@ std::error_code ObjectFile::parse() {
   // Read section and symbol tables.
   if (auto EC = initializeChunks())
     return EC;
-  if (auto EC = initializeSymbols())
-    return EC;
-  return std::error_code();
+  return initializeSymbols();
 }
 
 SymbolBody *ObjectFile::getSymbolBody(uint32_t SymbolIndex) {

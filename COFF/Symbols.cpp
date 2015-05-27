@@ -91,5 +91,6 @@ ErrorOr<std::unique_ptr<InputFile>> Lazy::getMember() {
   Obj->setParentName(File->getName());
   return std::move(Obj);
 }
-}
-}
+
+} // namespace coff
+} // namespace lld

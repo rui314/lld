@@ -98,8 +98,7 @@ protected:
   // The RVA of this chunk in the output. The writer sets a value.
   uint64_t RVA = 0;
 
-  // The offset from beginning of the output file. The writer sets a
-  // value.
+  // The offset from beginning of the output file. The writer sets a value.
   uint64_t FileOff = 0;
 
   // The alignment of this chunk. The writer uses the value.

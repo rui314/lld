@@ -240,5 +240,6 @@ bool link(int Argc, const char *Argv[]) {
   }
   return true;
 }
-}
-}
+
+} // namespace coff
+} // namespace lld

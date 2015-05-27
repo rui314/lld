@@ -27,6 +27,7 @@ namespace coff {
 
 SectionChunk::SectionChunk(ObjectFile *F, const coff_section *H, uint32_t SI)
     : File(F), Header(H), SectionIndex(SI) {
+  // Initialize SectionName.
   File->getCOFFObj()->getSectionName(Header, SectionName);
   // Bit [20:24] contains section alignment.
   unsigned Shift = ((Header->Characteristics & 0xF00000) >> 20) - 1;
