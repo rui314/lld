@@ -239,9 +239,8 @@ std::error_code ImportFile::parse() {
   SymbolBodies.push_back(ImpSym);
 
   // If type is function, we need to create a thunk which jump to an
-  // address pointed by the __imp_ symbol we have just created without
-  // __imp_ prefix. (This allows you to call DLL functions just like
-  // regular non-DLL functions.)
+  // address pointed by the __imp_ symbol. (This allows you to call
+  // DLL functions just like regular non-DLL functions.)
   if (Hdr->getType() == llvm::COFF::IMPORT_CODE)
     SymbolBodies.push_back(new (Alloc) DefinedImportThunk(Name, ImpSym));
   return std::error_code();
