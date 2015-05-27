@@ -12,18 +12,45 @@
 
 #include "Memory.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Object/COFF.h"
+#include "llvm/Option/Arg.h"
+#include "llvm/Option/ArgList.h"
 #include <memory>
 #include <system_error>
 #include <vector>
+
+using llvm::COFF::MachineTypes;
 
 namespace lld {
 namespace coff {
 
 class InputFile;
 
+ErrorOr<std::unique_ptr<llvm::opt::InputArgList>>
+parseArgs(int Argc, const char *Argv[]);
+
 std::error_code parseDirectives(StringRef S,
                                 std::vector<std::unique_ptr<InputFile>> *Res,
                                 StringAllocator *Alloc);
+
+// Functions below are defined in DriverUtils.
+
+// "ENV" environment variable-aware file finders.
+std::string findLib(StringRef Filename);
+std::string findFile(StringRef Filename);
+
+// For /machine option.
+ErrorOr<MachineTypes> getMachineType(llvm::opt::InputArgList *Args);
+
+void printHelp(const char *Argv0);
+
+// Create enum with OPT_xxx values for each option in Options.td
+enum {
+  OPT_INVALID = 0,
+#define OPTION(_1, _2, ID, _4, _5, _6, _7, _8, _9, _10, _11) OPT_##ID,
+#include "Options.inc"
+#undef OPTION
+};
 
 } // namespace coff
 } // namespace lld
