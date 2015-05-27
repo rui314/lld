@@ -101,13 +101,12 @@ void Writer::createSections() {
 
   // Input sections are ordered by their names including '$' parts,
   // which gives you some control over the output layout.
-  auto Comp = [](Chunk *A, Chunk *B) {
-    return A->getSectionName() < B->getSectionName();
-  };
   for (auto &P : Map) {
     StringRef SectionName = P.first;
     std::vector<Chunk *> &Chunks = P.second;
-    std::stable_sort(Chunks.begin(), Chunks.end(), Comp);
+    std::stable_sort(Chunks.begin(), Chunks.end(), [](Chunk *A, Chunk *B) {
+      return A->getSectionName() < B->getSectionName();
+    });
     auto Sec =
         llvm::make_unique<OutputSection>(SectionName, OutputSections.size());
     for (Chunk *C : Chunks) {
@@ -124,32 +123,30 @@ std::map<StringRef, std::vector<DefinedImportData *>> Writer::binImports() {
   // are layed out in the import descriptor table.
   std::map<StringRef, std::vector<DefinedImportData *>> Res;
   OutputSection *Text = createSection(".text");
-  for (std::unique_ptr<ImportFile> &P : Symtab->ImportFiles) {
-    for (SymbolBody *B : P->getSymbols()) {
-      if (auto *Import = dyn_cast<DefinedImportData>(B)) {
-        Res[Import->getDLLName()].push_back(Import);
-        continue;
-      }
-      // Linker-created function thunks for DLL symbols are added to
-      // .text section.
-      Text->addChunk(cast<DefinedImportThunk>(B)->getChunk());
+  for (SymbolBody *B : Symtab->getImportSymbols()) {
+    if (auto *Import = dyn_cast<DefinedImportData>(B)) {
+      Res[Import->getDLLName()].push_back(Import);
+      continue;
     }
+    // Linker-created function thunks for DLL symbols are added to
+    // .text section.
+    Text->addChunk(cast<DefinedImportThunk>(B)->getChunk());
   }
 
   // Sort symbols by name for each group.
-  auto Comp = [](DefinedImportData *A, DefinedImportData *B) {
-    return A->getName() < B->getName();
-  };
   for (auto &P : Res) {
     std::vector<DefinedImportData *> &V = P.second;
-    std::sort(V.begin(), V.end(), Comp);
+    std::sort(V.begin(), V.end(),
+              [](DefinedImportData *A, DefinedImportData *B) {
+                return A->getName() < B->getName();
+              });
   }
   return Res;
 }
 
 // Create .idata section contents.
 void Writer::createImportTables() {
-  if (Symtab->ImportFiles.empty())
+  if (!Symtab->hasImportSymbols())
     return;
 
   std::vector<ImportTable> Tabs;
@@ -164,23 +161,21 @@ void Writer::createImportTables() {
   // Add the directory tables.
   for (ImportTable &T : Tabs)
     Idata->addChunk(T.DirTab);
-  Idata->addChunk(new NullChunk(sizeof(ImportDirectoryTableEntry)));
-  ImportDirectoryTableSize = (Tabs.size() + 1) * sizeof(ImportDirectoryTableEntry);
+  Idata->addChunk(new NullChunk(sizeof(coff_import_directory_table_entry)));
+  ImportDirectoryTableSize =
+      (Tabs.size() + 1) * sizeof(coff_import_directory_table_entry);
 
   // Add the import lookup tables.
-  for (ImportTable &T : Tabs) {
-    for (LookupChunk *C : T.LookupTables)
+  for (ImportTable &T : Tabs)
+    for (Chunk *C : T.LookupTables)
       Idata->addChunk(C);
-    Idata->addChunk(new NullChunk(sizeof(uint64_t)));
-  }
 
   // Add the import address tables. Their contents are the same as the
   // lookup tables.
   for (ImportTable &T : Tabs) {
-    for (LookupChunk *C : T.AddressTables)
+    for (Chunk *C : T.AddressTables)
       Idata->addChunk(C);
-    Idata->addChunk(new NullChunk(sizeof(uint64_t)));
-    ImportAddressTableSize += (T.AddressTables.size() + 1) * sizeof(uint64_t);
+    ImportAddressTableSize += T.AddressTables.size() * sizeof(uint64_t);
   }
   ImportAddressTable = Tabs[0].AddressTables[0];
 
@@ -297,7 +292,7 @@ void Writer::writeHeader() {
 std::error_code Writer::openFile(StringRef Path) {
   if (auto EC = FileOutputBuffer::create(Path, FileSize, Buffer,
                                          FileOutputBuffer::F_executable))
-    return make_dynamic_error_code(Twine("Failed to open ") + Path + ": " +
+    return make_dynamic_error_code(Twine("failed to open ") + Path + ": " +
                                    EC.message());
   return std::error_code();
 }
@@ -372,9 +367,7 @@ std::error_code Writer::write(StringRef OutputPath) {
   writeHeader();
   writeSections();
   applyRelocations();
-  if (auto EC = Buffer->commit())
-    return EC;
-  return std::error_code();
+  return Buffer->commit();
 }
 
 } // namespace coff

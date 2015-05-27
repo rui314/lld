@@ -219,9 +219,9 @@ public:
   size_t getSize() const override { return sizeof(ImportDirectoryTableEntry); }
   void applyRelocations(uint8_t *Buf) override;
 
-  StringChunk *DLLName;
-  LookupChunk *LookupTab;
-  LookupChunk *AddressTab;
+  Chunk *DLLName;
+  Chunk *LookupTab;
+  Chunk *AddressTab;
 };
 
 // A chunk for the import descriptor table.
@@ -242,8 +242,8 @@ public:
   ImportTable(StringRef DLLName, std::vector<DefinedImportData *> &Symbols);
   StringChunk *DLLName;
   DirectoryChunk *DirTab;
-  std::vector<LookupChunk *> LookupTables;
-  std::vector<LookupChunk *> AddressTables;
+  std::vector<Chunk *> LookupTables;
+  std::vector<Chunk *> AddressTables;
   std::vector<HintNameChunk *> HintNameTables;
 };
 

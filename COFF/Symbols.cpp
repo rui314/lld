@@ -22,7 +22,7 @@ namespace lld {
 namespace coff {
 
 // Returns 1, 0 or -1 if this symbol should take precedence over the
-// Other in the symbol table, tie or lose, respectively.
+// other, tie or lose in the symbol table, respectively.
 int Defined::compare(SymbolBody *Other) {
   if (!isa<Defined>(Other))
     return 1;

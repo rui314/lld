@@ -85,7 +85,7 @@ void SectionChunk::applyRelocations(uint8_t *Buf) {
   }
 }
 
-static void add16(uint8_t *P, int32_t V) { write16le(P, read16le(P) + V); }
+static void add16(uint8_t *P, int16_t V) { write16le(P, read16le(P) + V); }
 static void add32(uint8_t *P, int32_t V) { write32le(P, read32le(P) + V); }
 static void add64(uint8_t *P, int64_t V) { write64le(P, read64le(P) + V); }
 
@@ -193,6 +193,8 @@ ImportTable::ImportTable(StringRef N,
     LookupTables.push_back(new LookupChunk(H));
     AddressTables.push_back(new LookupChunk(H));
   }
+  LookupTables.push_back(new NullChunk(sizeof(uint64_t)));
+  AddressTables.push_back(new NullChunk(sizeof(uint64_t)));
 
   for (int I = 0, E = Symbols.size(); I < E; ++I)
     Symbols[I]->setLocation(AddressTables[I]);

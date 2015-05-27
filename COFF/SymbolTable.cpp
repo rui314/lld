@@ -155,6 +155,15 @@ std::vector<Chunk *> SymbolTable::getChunks() {
   return Res;
 }
 
+std::vector<SymbolBody *> SymbolTable::getImportSymbols() {
+  std::vector<SymbolBody *> Res;
+  for (std::unique_ptr<ImportFile> &File : ImportFiles) {
+    std::vector<SymbolBody *> &Syms = File->getSymbols();
+    Res.insert(Res.end(), Syms.begin(), Syms.end());
+  }
+  return Res;
+}
+
 SymbolBody *SymbolTable::find(StringRef Name) {
   auto It = Symtab.find(Name);
   if (It == Symtab.end())

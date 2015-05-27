@@ -37,7 +37,7 @@ public:
   // Print an error message on undefined symbols.
   bool reportRemainingUndefines();
 
-  // Returns a list of chunks of selected symbols.
+  // Returns all ObjectFile chunks.
   std::vector<Chunk *> getChunks();
 
   // Returns a symbol for a given name. It's not guaranteed that the
@@ -49,9 +49,9 @@ public:
   // Dump contents of the symbol table to stderr.
   void dump();
 
-  // The writer needs to handle DLL import libraries specially in
-  // order to create the import descriptor table.
-  std::vector<std::unique_ptr<ImportFile>> ImportFiles;
+  // Returns all ImportFile symbols.
+  bool hasImportSymbols() { return !ImportFiles.empty(); }
+  std::vector<SymbolBody *> getImportSymbols();
 
 private:
   std::error_code addObject(ObjectFile *File);
@@ -65,6 +65,7 @@ private:
   std::unordered_map<StringRef, Symbol *> Symtab;
   std::vector<std::unique_ptr<ObjectFile>> ObjectFiles;
   std::vector<std::unique_ptr<ArchiveFile>> ArchiveFiles;
+  std::vector<std::unique_ptr<ImportFile>> ImportFiles;
   std::vector<std::unique_ptr<SymbolBody>> OwnedSymbols;
   llvm::BumpPtrAllocator Alloc;
   StringAllocator StringAlloc;
