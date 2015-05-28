@@ -19,11 +19,11 @@
 #include <memory>
 #include <vector>
 
-using llvm::object::Archive;
-using llvm::object::COFFSymbolRef;
-
 namespace lld {
 namespace coff {
+
+using llvm::object::Archive;
+using llvm::object::COFFSymbolRef;
 
 class ArchiveFile;
 class InputFile;

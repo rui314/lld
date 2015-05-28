@@ -16,15 +16,15 @@
 #include <map>
 #include <vector>
 
+namespace lld {
+namespace coff {
+
 using llvm::COFF::ImportDirectoryTableEntry;
 using llvm::object::COFFSymbolRef;
 using llvm::object::SectionRef;
 using llvm::object::coff_relocation;
 using llvm::object::coff_section;
 using llvm::sys::fs::file_magic;
-
-namespace lld {
-namespace coff {
 
 class Defined;
 class DefinedImportData;
@@ -41,7 +41,9 @@ public:
 
   // Returns the pointer to data. It is illegal to call this function if
   // this is a common or BSS chunk.
-  virtual const uint8_t *getData() const { llvm_unreachable("internal error"); }
+  virtual const uint8_t *getData() const {
+    llvm_unreachable("unimplemented getData");
+  }
 
   // Returns the size of this chunk (even if this is a common or BSS.)
   virtual size_t getSize() const = 0;
@@ -70,14 +72,16 @@ public:
   // Returns the section name if this is a section chunk.
   // It is illegal to call this function on non-section chunks.
   virtual StringRef getSectionName() const {
-    llvm_unreachable("internal error");
+    llvm_unreachable("unimplemented getSectionName");
   }
 
   // Called if the garbage collector decides to not include this chunk
-  // in a final output. It's supposed to print out a log message. It
-  // is illegal to call this function on non-section chunks because
+  // in a final output. It's supposed to print out a log message to stderr.
+  // It is illegal to call this function on non-section chunks because
   // only section chunks are subject of garbage collection.
-  virtual void printDiscardedMessage() { llvm_unreachable("internal error"); }
+  virtual void printDiscardedMessage() {
+    llvm_unreachable("unimplemented printDiscardedMessage");
+  }
 
   // Returns true if this is a COMDAT section. Usually, it is an error
   // if there are more than one defined symbols having the same name,
@@ -108,7 +112,7 @@ protected:
   OutputSection *Out = nullptr;
 };
 
-// A chunk representing a section of an input file.
+// A chunk corresponding a section of an input file.
 class SectionChunk : public Chunk {
 public:
   SectionChunk(ObjectFile *File, const coff_section *Header,
@@ -224,7 +228,9 @@ public:
   LookupChunk *AddressTab;
 };
 
-// A chunk for the import descriptor table.
+// A chunk for the import descriptor table representing.
+// Contents of this chunk is always null bytes.
+// This is used for terminating import tables.
 class NullChunk : public Chunk {
 public:
   explicit NullChunk(size_t N) : Size(N) {}

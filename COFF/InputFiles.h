@@ -21,11 +21,11 @@
 #include <set>
 #include <vector>
 
-using llvm::object::Archive;
-using llvm::object::COFFObjectFile;
-
 namespace lld {
 namespace coff {
+
+using llvm::object::Archive;
+using llvm::object::COFFObjectFile;
 
 // The root class of input files.
 class InputFile {

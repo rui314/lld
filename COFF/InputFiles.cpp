@@ -104,9 +104,12 @@ std::error_code ObjectFile::parse() {
     return EC;
   std::unique_ptr<Binary> Bin = std::move(BinOrErr.get());
 
-  if (!isa<COFFObjectFile>(Bin.get()))
+  if (auto *Obj = dyn_cast<COFFObjectFile>(Bin.get())) {
+    Bin.release();
+    COFFObj.reset(Obj);
+  } else {
     return make_dynamic_error_code(Twine(Name) + " is not a COFF file.");
-  COFFObj.reset(cast<COFFObjectFile>(Bin.release()));
+  }
 
   // Read section and symbol tables.
   if (auto EC = initializeChunks())
