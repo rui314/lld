@@ -20,6 +20,7 @@
 #include <vector>
 
 using llvm::COFF::MachineTypes;
+using llvm::COFF::WindowsSubsystem;
 
 namespace lld {
 namespace coff {
@@ -48,6 +49,10 @@ std::error_code parseNumbers(StringRef Arg, uint64_t *Addr,
 
 // Parses a string in the form of "<integer>[.<integer>]".
 std::error_code parseVersion(StringRef Arg, uint32_t *Major, uint32_t *Minor);
+
+// Parses a string in the form of "<subsystem>[,<integer>[.<integer>]]".
+std::error_code parseSubsystem(StringRef Arg, WindowsSubsystem *Sys,
+                               uint32_t *Major, uint32_t *Minor);
 
 void printHelp(const char *Argv0);
 

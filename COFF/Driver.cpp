@@ -143,6 +143,13 @@ static std::error_code doLink(int Argc, const char *Argv[]) {
                                &Config->MinorImageVersion))
       return make_dynamic_error_code(Twine("/version: ") + EC.message());
 
+  // Handle /subsystem
+  if (auto *Arg = Args->getLastArg(OPT_subsystem))
+    if (auto EC = parseSubsystem(Arg->getValue(), &Config->Subsystem,
+                                 &Config->MajorOSVersion,
+                                 &Config->MinorOSVersion))
+      return make_dynamic_error_code(Twine("/subsystem: ") + EC.message());
+
   // Parse all input files and put all symbols to the symbol table.
   // The symbol table will take care of name resolution.
   SymbolTable Symtab;
