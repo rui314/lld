@@ -46,7 +46,7 @@ public:
   virtual void writeTo(uint8_t *Buf) {}
 
   // The writer sets and uses the addresses.
-  uint64_t getRVA() { return RVA; }
+  virtual uint64_t getRVA() { return RVA; }
   uint64_t getFileOff() { return FileOff; }
   uint32_t getAlign() { return Align; }
   void setRVA(uint64_t V) { RVA = V; }
@@ -125,19 +125,29 @@ public:
 
   bool isRoot() override;
   void markLive() override;
-  bool isLive() override { return Live; }
+  bool isLive() override { return !Merged && Live; }
 
   // Adds COMDAT associative sections to this COMDAT section. A chunk
   // and its children are treated as a group by the garbage collector.
   void addAssociative(SectionChunk *Child);
 
+  // Identical COMDAT section merging.
+  bool isMergeable(SectionChunk *Other);
+  uint64_t getHeaderHash();
+  SectionChunk *Merged = nullptr;
+  uint64_t getRVA() override { return Merged ? Merged->getRVA() : RVA; }
+  std::string getDebugName() const;
+
 private:
   SectionRef getSectionRef();
   void applyReloc(uint8_t *Buf, const coff_relocation *Rel);
+  bool hasSameRelocations(SectionChunk *Other);
+  bool hasSameContents(SectionChunk *Other);
 
   // A file this chunk was created from.
   ObjectFile *File;
 
+  uint64_t HashVal;
   const coff_section *Header;
   uint32_t SectionIndex;
   StringRef SectionName;

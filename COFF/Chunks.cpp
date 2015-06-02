@@ -10,6 +10,7 @@
 #include "Chunks.h"
 #include "InputFiles.h"
 #include "Writer.h"
+#include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Support/COFF.h"
@@ -125,6 +126,80 @@ uint32_t SectionChunk::getPermissions() const {
 
 bool SectionChunk::isCOMDAT() const {
   return Header->Characteristics & IMAGE_SCN_LNK_COMDAT;
+}
+
+bool SectionChunk::isMergeable(SectionChunk *Other) {
+  assert(isCOMDAT());
+  assert(Other->isCOMDAT());
+  const coff_section *H = Other->Header;
+  return (File != Other->File && 
+          !(Header->Characteristics & IMAGE_SCN_MEM_WRITE) &&
+          !(H->Characteristics & IMAGE_SCN_MEM_WRITE) &&
+          Header->VirtualSize == H->VirtualSize &&
+          Header->SizeOfRawData == H->SizeOfRawData &&
+          Header->NumberOfRelocations == H->NumberOfRelocations &&
+          (Header->Characteristics & PermMask) == (H->Characteristics & PermMask) &&
+          hasSameRelocations(Other) &&
+          hasSameContents(Other));
+}
+
+uint64_t SectionChunk::getHeaderHash() {
+  if (HashVal)
+    HashVal;
+
+  uint64_t H = 0;
+  if (hasData()) {
+    ArrayRef<uint8_t> A;
+    File->getCOFFObj()->getSectionContents(Header, A);
+    H = llvm::hash_combine_range(A.data(), A.data() + A.size());
+  }
+  HashVal = llvm::hash_combine((uint32_t)Header->VirtualSize,
+                               (uint32_t)Header->SizeOfRawData,
+                               (uint32_t)Header->NumberOfRelocations,
+                               (Header->Characteristics & PermMask),
+                               H);
+  return HashVal;
+}
+
+bool SectionChunk::hasSameRelocations(SectionChunk *Other) {
+  relocation_iterator I1 = getSectionRef().relocations().begin();
+  relocation_iterator E1 = getSectionRef().relocations().end();
+  relocation_iterator I2 = Other->getSectionRef().relocations().begin();
+  relocation_iterator E2 = Other->getSectionRef().relocations().end();
+
+  for (; I1 != E1; ++I1, ++I2) {
+    assert(I2 != E2);
+    const coff_relocation *R1 = File->getCOFFObj()->getCOFFRelocation(*I1);
+    const coff_relocation *R2 = Other->File->getCOFFObj()->getCOFFRelocation(*I2);
+    if (R1->VirtualAddress != R2->VirtualAddress)
+      return false;
+    if (R1->Type != R2->Type)
+      return false;
+    if (R1->Type == IMAGE_REL_AMD64_SECTION)
+      continue;
+    SymbolBody *S1 = File->getSymbolBody(R1->SymbolTableIndex);
+    SymbolBody *S2 = Other->File->getSymbolBody(R2->SymbolTableIndex);
+    if (S1->getReplacement() != S2->getReplacement())
+      return false;
+  }
+  return true;
+}
+
+bool SectionChunk::hasSameContents(SectionChunk *Other) {
+  ArrayRef<uint8_t> A1, A2;
+  File->getCOFFObj()->getSectionContents(Header, A1);
+  Other->File->getCOFFObj()->getSectionContents(Header, A2);
+  if (A1.size() != A2.size()) {
+    // llvm::dbgs() << "diff: " << getDebugName() << " and " << Other->getDebugName() << "\n";
+    return false;
+    assert(A1.size() == A2.size());
+  }
+  return memcmp(A1.data(), A2.data(), A1.size()) == 0;
+}
+
+std::string SectionChunk::getDebugName() const {
+  return (Twine(File->getShortName()) + ":" + SectionName +
+          "(" + Twine::utohexstr(SectionIndex) + ")").str();
 }
 
 // Prints "Discarded <symbol>" for all external function symbols.

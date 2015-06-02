@@ -75,6 +75,7 @@ public:
 
 private:
   void markLive();
+  void mergeCOMDATs();
   void createSections();
   void createImportTables();
   void assignAddresses();

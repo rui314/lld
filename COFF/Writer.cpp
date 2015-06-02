@@ -20,6 +20,7 @@
 #include <cstdio>
 #include <functional>
 #include <map>
+#include <unordered_map>
 #include <utility>
 
 using namespace llvm;
@@ -92,6 +93,36 @@ void Writer::markLive() {
   for (Chunk *C : Symtab->getChunks())
     if (C->isRoot())
       C->markLive();
+}
+
+void Writer::mergeCOMDATs() {
+  llvm::dbgs() << "mergeCOMDATs begin\n";
+  size_t Cnt = 0;
+  std::unordered_multimap<uint64_t, SectionChunk *> Map;
+  std::vector<Chunk *> V = Symtab->getChunks();
+  for (Chunk *C : V) {
+    if (Cnt % 10000 == 0)
+      llvm::dbgs() << "Cnt=" << Cnt << "/" << V.size() << "\n";
+    Cnt++;
+    if (!C->isLive() || !C->isCOMDAT() || !C->hasData())
+      continue;
+    auto *SC1 = static_cast<SectionChunk *>(C);
+    uint64_t H = SC1->getHeaderHash();
+    auto Range = Map.equal_range(H);
+    for (auto I = Range.first; I != Range.second; ++I) {
+      SectionChunk *SC2 = I->second;
+      if (!SC1->isMergeable(SC2))
+        continue;
+      SC1->Merged = SC2;
+      if (Config->Verbose)
+        llvm::dbgs() << SC1->getSectionName() << " is merged with "
+                     << SC2->getSectionName() << "\n";
+      goto next;
+    }
+    Map.insert(std::make_pair(H, SC1));
+  next:;
+  }
+  llvm::dbgs() << "mergeCOMDATs end\n";
 }
 
 void Writer::createSections() {
@@ -422,6 +453,7 @@ void Writer::applyRelocations() {
 
 std::error_code Writer::write(StringRef OutputPath) {
   markLive();
+  mergeCOMDATs();
   createSections();
   createImportTables();
   assignAddresses();
