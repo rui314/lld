@@ -10,6 +10,7 @@
 #ifndef LLD_COFF_SYMBOL_TABLE_H
 #define LLD_COFF_SYMBOL_TABLE_H
 
+#include "Concurrent.h"
 #include "InputFiles.h"
 #include "Memory.h"
 #include "llvm/Support/Allocator.h"
@@ -32,7 +33,7 @@ class SymbolTable {
 public:
   SymbolTable();
 
-  std::error_code addFile(std::unique_ptr<InputFile> File);
+  void addFile(std::unique_ptr<InputFile> File);
 
   // Print an error message on undefined symbols.
   bool reportRemainingUndefines();
@@ -45,6 +46,7 @@ public:
   // mechanisms to allow aliases, a name can be resolved to a
   // different symbol). Returns a nullptr if not found.
   Defined *find(StringRef Name);
+  std::error_code wait();
 
   // Windows specific -- `main` is not the only main function in Windows.
   // You can choose one from these four -- {w,}{WinMain,main}.
@@ -86,12 +88,15 @@ private:
   std::error_code addMemberFile(Lazy *Body);
   std::error_code addSymbol(SymbolBody *Body);
 
-  std::unordered_map<StringRef, Symbol *> Symtab;
-  std::vector<std::unique_ptr<ArchiveFile>> ArchiveFiles;
-  std::vector<std::unique_ptr<BitcodeFile>> BitcodeFiles;
-  std::vector<std::unique_ptr<SymbolBody>> OwningSymbols;
+  std::atomic<bool> HasError;
+  std::error_code LastError;
+
+  TaskGroup TG;
+  ConcMap<StringRef, Symbol *> Symtab;
+  ConcVector<std::unique_ptr<ArchiveFile>> ArchiveFiles;
+  ConcVector<std::unique_ptr<BitcodeFile>> BitcodeFiles;
+  ConcVector<std::unique_ptr<SymbolBody>> OwningSymbols;
   std::unique_ptr<MemoryBuffer> LTOObjectFile;
-  llvm::BumpPtrAllocator Alloc;
 };
 
 } // namespace pecoff

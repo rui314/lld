@@ -97,6 +97,7 @@ public:
 std::error_code
 LinkerDriver::parseDirectives(StringRef S,
                               std::vector<std::unique_ptr<InputFile>> *Res) {
+  std::lock_guard<std::mutex> lock(Mu);
   SmallVector<const char *, 16> Tokens;
   Tokens.push_back("link"); // argv[0] value. Will be ignored.
   BumpPtrStringSaver Saver(&Alloc);
@@ -324,10 +325,12 @@ bool LinkerDriver::link(int Argc, const char *Argv[]) {
       return false;
     }
     std::unique_ptr<InputFile> File = std::move(FileOrErr.get());
-    if (auto EC = Symtab.addFile(std::move(File))) {
-      llvm::errs() << Path << ": " << EC.message() << "\n";
-      return false;
-    }
+    Symtab.addFile(std::move(File));
+  }
+
+  if (auto EC = Symtab.wait()) {
+    llvm::errs() << EC.message() << "\n";
+    return false;
   }
 
   // Add weak aliases. Weak aliases is a mechanism to give remaining

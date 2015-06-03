@@ -11,6 +11,7 @@
 #define LLD_COFF_INPUT_FILES_H
 
 #include "Chunks.h"
+#include "Concurrent.h"
 #include "Memory.h"
 #include "Symbols.h"
 #include "lld/Core/LLVM.h"
@@ -83,7 +84,7 @@ private:
   std::string Filename;
   MemoryBufferRef MB;
   std::vector<SymbolBody *> SymbolBodies;
-  std::set<const char *> Seen;
+  ConcSet<const char *> Seen;
   llvm::MallocAllocator Alloc;
 };
 

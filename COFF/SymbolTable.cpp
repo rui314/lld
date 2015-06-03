@@ -27,17 +27,35 @@ SymbolTable::SymbolTable() {
     addUndefined(Config->EntryName);
 }
 
-std::error_code SymbolTable::addFile(std::unique_ptr<InputFile> File) {
-  if (auto EC = File->parse())
-    return EC;
+void SymbolTable::addFile(std::unique_ptr<InputFile> File) {
   InputFile *FileP = File.release();
-  if (auto *P = dyn_cast<ObjectFile>(FileP))
-    return addObject(P);
-  if (auto *P = dyn_cast<ArchiveFile>(FileP))
-    return addArchive(P);
-  if (auto *P = dyn_cast<BitcodeFile>(FileP))
-    return addBitcode(P);
-  return addImport(cast<ImportFile>(FileP));
+  TG.run([this, FileP] {
+    if (HasError)
+      return;
+    if (auto EC = FileP->parse()) {
+      if (!HasError.exchange(true))
+        LastError = EC;
+      return;
+    }
+    std::error_code EC;
+    if (auto *P = dyn_cast<ObjectFile>(FileP)) {
+      EC = addObject(P);
+    } else if (auto *P = dyn_cast<ArchiveFile>(FileP)) {
+      EC = addArchive(P);
+    } else if (auto *P = dyn_cast<BitcodeFile>(FileP)) {
+      EC = addBitcode(P);
+    } else {
+      EC = addImport(cast<ImportFile>(FileP));
+    }
+    if (EC)
+      if (!HasError.exchange(true))
+        LastError = EC;
+  });
+}
+
+std::error_code SymbolTable::wait() {
+  TG.wait();
+  return HasError ? LastError : std::error_code();
 }
 
 std::error_code SymbolTable::addObject(ObjectFile *File) {
@@ -61,7 +79,7 @@ std::error_code SymbolTable::addObject(ObjectFile *File) {
 }
 
 std::error_code SymbolTable::addArchive(ArchiveFile *File) {
-  ArchiveFiles.emplace_back(File);
+  ArchiveFiles.push_back(std::unique_ptr<ArchiveFile>(File));
   for (SymbolBody *Body : File->getSymbols())
     if (auto EC = resolve(Body))
       return EC;
@@ -69,7 +87,7 @@ std::error_code SymbolTable::addArchive(ArchiveFile *File) {
 }
 
 std::error_code SymbolTable::addBitcode(BitcodeFile *File) {
-  BitcodeFiles.emplace_back(File);
+  BitcodeFiles.push_back(std::unique_ptr<BitcodeFile>(File));
   for (SymbolBody *Body : File->getSymbols())
     if (Body->isExternal())
       if (auto EC = resolve(Body))
@@ -80,7 +98,7 @@ std::error_code SymbolTable::addBitcode(BitcodeFile *File) {
 }
 
 std::error_code SymbolTable::addImport(ImportFile *File) {
-  ImportFiles.emplace_back(File);
+  ImportFiles.push_back(std::unique_ptr<ImportFile>(File));
   for (SymbolBody *Body : File->getSymbols())
     if (auto EC = resolve(Body))
       return EC;
@@ -91,12 +109,12 @@ bool SymbolTable::reportRemainingUndefines() {
   bool Ret = false;
   for (auto &I : Symtab) {
     Symbol *Sym = I.second;
-    auto *Undef = dyn_cast<Undefined>(Sym->Body);
+    auto *Undef = dyn_cast<Undefined>(&*Sym->Body);
     if (!Undef)
       continue;
     if (SymbolBody *Alias = Undef->getWeakAlias()) {
       Sym->Body = Alias->getReplacement();
-      if (!isa<Defined>(Sym->Body)) {
+      if (!isa<Defined>(&*Sym->Body)) {
         // Aliases are yet another symbols pointed by other symbols
         // that could also remain undefined.
         llvm::errs() << "undefined symbol: " << Undef->getName() << "\n";
@@ -115,30 +133,42 @@ bool SymbolTable::reportRemainingUndefines() {
 std::error_code SymbolTable::resolve(SymbolBody *New) {
   // Find an existing Symbol or create and insert a new one.
   StringRef Name = New->getName();
-  Symbol *&Sym = Symtab[Name];
-  if (!Sym) {
-    Sym = new (Alloc) Symbol(New);
+  Symbol *Sym = new Symbol(New);
+  auto P = Symtab.insert(std::make_pair(Name, Sym));
+  if (P.second) {
+    // NewVal is inserted
     New->setBackref(Sym);
     return std::error_code();
   }
+  // There's an existing SymbolBody
+  Sym = P.first->second;
   New->setBackref(Sym);
 
   // compare() returns -1, 0, or 1 if the lhs symbol is less preferable,
   // equivalent (conflicting), or more preferable, respectively.
-  SymbolBody *Existing = Sym->Body;
-  int comp = Existing->compare(New);
-  if (comp < 0)
-    Sym->Body = New;
-  if (comp == 0) {
-    llvm::errs() << "duplicate symbol: " << Name << "\n";
-    return make_error_code(LLDError::DuplicateSymbols);
+  SymbolBody *Existing, *Selected;
+  for (;;) {
+    Existing = Sym->Body;
+    int comp = Existing->compare(New);
+    if (comp < 0) {
+      if (!Sym->Body.compare_exchange_strong(Existing, New))
+        continue;
+      Selected = New;
+      break;
+    }
+    if (comp == 0) {
+      llvm::errs() << "duplicate symbol: " << Name << "\n";
+      return make_error_code(LLDError::DuplicateSymbols);
+    }
+    Selected = Existing;
+    break;
   }
 
   // If we have an Undefined symbol for a Lazy symbol, we need
   // to read an archive member to replace the Lazy symbol with
   // a Defined symbol.
   if (isa<Undefined>(Existing) || isa<Undefined>(New))
-    if (auto *B = dyn_cast<Lazy>(Sym->Body))
+    if (auto *B = dyn_cast<Lazy>(Selected))
       return addMemberFile(B);
   return std::error_code();
 }
@@ -157,7 +187,8 @@ std::error_code SymbolTable::addMemberFile(Lazy *Body) {
   if (Config->Verbose)
     llvm::dbgs() << "Loaded " << File->getShortName() << " for "
                  << Body->getName() << "\n";
-  return addFile(std::move(File));
+  addFile(std::move(File));
+  return std::error_code();
 }
 
 std::vector<Chunk *> SymbolTable::getChunks() {
@@ -173,7 +204,7 @@ Defined *SymbolTable::find(StringRef Name) {
   auto It = Symtab.find(Name);
   if (It == Symtab.end())
     return nullptr;
-  if (auto *Def = dyn_cast<Defined>(It->second->Body))
+  if (auto *Def = dyn_cast<Defined>(&*It->second->Body))
     return Def;
   return nullptr;
 }
@@ -192,7 +223,8 @@ ErrorOr<StringRef> SymbolTable::findDefaultEntry() {
       return StringRef(E[1]);
     if (!find(E[0]))
       continue;
-    if (auto EC = addSymbol(new Undefined(E[1])))
+    SymbolBody *Body = new Undefined(E[1]);
+    if (auto EC = addSymbol(Body))
       return EC;
     return StringRef(E[1]);
   }
@@ -206,7 +238,7 @@ std::error_code SymbolTable::addUndefined(StringRef Name) {
 
 // Resolve To, and make From an alias to To.
 std::error_code SymbolTable::rename(StringRef From, StringRef To) {
-  SymbolBody *Body = new (Alloc) Undefined(To);
+  SymbolBody *Body = new Undefined(To);
   if (auto EC = resolve(Body))
     return EC;
   Symtab[From]->Body = Body->getReplacement();
@@ -221,7 +253,7 @@ std::error_code SymbolTable::addSymbol(SymbolBody *Body) {
 void SymbolTable::dump() {
   for (auto &P : Symtab) {
     Symbol *Ref = P.second;
-    if (auto *Body = dyn_cast<Defined>(Ref->Body))
+    if (auto *Body = dyn_cast<Defined>(&*Ref->Body))
       llvm::dbgs() << Twine::utohexstr(Config->ImageBase + Body->getRVA())
                    << " " << Body->getName() << "\n";
   }
@@ -232,19 +264,15 @@ std::error_code SymbolTable::addCombinedLTOObject() {
     return std::error_code();
 
   llvm::LTOCodeGenerator CG;
-  std::set<DefinedBitcode *> PreservedBitcodeSymbols;
 
   // All symbols referenced by non-bitcode objects must be preserved.
   for (std::unique_ptr<ObjectFile> &File : ObjectFiles)
     for (SymbolBody *Body : File->getSymbols())
       if (auto *S = dyn_cast<DefinedBitcode>(Body->getReplacement()))
-        PreservedBitcodeSymbols.insert(S);
+        CG.addMustPreserveSymbol(S->getName());
 
   // Likewise for the linker-generated reference to the entry point.
-  if (auto *S = dyn_cast<DefinedBitcode>(Symtab[Config->EntryName]->Body))
-    PreservedBitcodeSymbols.insert(S);
-
-  for (DefinedBitcode *S : PreservedBitcodeSymbols)
+  if (auto *S = dyn_cast<DefinedBitcode>(&*Symtab[Config->EntryName]->Body))
     CG.addMustPreserveSymbol(S->getName());
 
   CG.setModule(BitcodeFiles[0]->releaseModule());
@@ -277,7 +305,7 @@ std::error_code SymbolTable::addCombinedLTOObject() {
     }
     Body->setBackref(Sym);
 
-    if (isa<DefinedBitcode>(Sym->Body)) {
+    if (isa<DefinedBitcode>(&*Sym->Body)) {
       // The symbol should now be defined.
       if (!isa<Defined>(Body)) {
         llvm::errs() << "LTO: undefined symbol: " << Name << '\n';

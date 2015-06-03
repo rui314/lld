@@ -11,6 +11,7 @@
 #define LLD_COFF_SYMBOLS_H
 
 #include "Chunks.h"
+#include "Concurrent.h"
 #include "Config.h"
 #include "lld/Core/LLVM.h"
 #include "llvm/ADT/ArrayRef.h"
@@ -36,7 +37,7 @@ class SymbolBody;
 // The resolver updates SymbolBody pointers as it resolves symbols.
 struct Symbol {
   explicit Symbol(SymbolBody *P) : Body(P) {}
-  SymbolBody *Body;
+  std::atomic<SymbolBody *> Body;
 };
 
 // The base class for real symbol classes.
@@ -70,7 +71,7 @@ public:
   // has chosen the object among other objects having the same name,
   // you can access P->Backref->Body to get the resolver's result.
   void setBackref(Symbol *P) { Backref = P; }
-  SymbolBody *getReplacement() { return Backref ? Backref->Body : this; }
+  SymbolBody *getReplacement() { return Backref ? &*Backref->Body : this; }
 
   // Decides which symbol should "win" in the symbol table, this or
   // the Other. Returns 1 if this wins, -1 if the Other wins, or 0 if

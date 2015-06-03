@@ -18,7 +18,7 @@ namespace lld {
 namespace coff {
 
 enum class LLDError {
-  InvalidOption = 1,
+  InvalidOption,
   InvalidFile,
   BrokenFile,
   DuplicateSymbols,

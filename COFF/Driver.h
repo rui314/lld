@@ -17,6 +17,7 @@
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
 #include <memory>
+#include <mutex>
 #include <set>
 #include <system_error>
 #include <vector>
@@ -66,6 +67,7 @@ private:
   // Driver is the owner of all opened files.
   // InputFiles have MemoryBufferRefs to them.
   std::vector<std::unique_ptr<MemoryBuffer>> OwningMBs;
+  std::mutex Mu;
 };
 
 ErrorOr<std::unique_ptr<llvm::opt::InputArgList>>
