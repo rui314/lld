@@ -51,7 +51,12 @@ std::string InputFile::getShortName() {
   return StringRef(Res).lower();
 }
 
-std::error_code ArchiveFile::parse() {
+std::error_code InputFile::parse() {
+  std::call_once(Once, [&]() { ParseError = doParse(); });
+  return ParseError;
+}
+
+std::error_code ArchiveFile::doParse() {
   // Parse a MemoryBufferRef as an archive file.
   auto ArchiveOrErr = Archive::create(MB);
   if (auto EC = ArchiveOrErr.getError())
@@ -90,7 +95,7 @@ ErrorOr<MemoryBufferRef> ArchiveFile::getMember(const Archive::Symbol *Sym) {
   return It->getMemoryBufferRef();
 }
 
-std::error_code ObjectFile::parse() {
+std::error_code ObjectFile::doParse() {
   // Parse a memory buffer as a COFF file.
   auto BinOrErr = createBinary(MB);
   if (auto EC = BinOrErr.getError())
@@ -242,7 +247,7 @@ Defined *ObjectFile::createDefined(COFFSymbolRef Sym, const void *AuxP,
   return B;
 }
 
-std::error_code ImportFile::parse() {
+std::error_code ImportFile::doParse() {
   const char *Buf = MB.getBufferStart();
   const char *End = MB.getBufferEnd();
   const auto *Hdr = reinterpret_cast<const coff_import_header *>(Buf);
@@ -272,7 +277,7 @@ std::error_code ImportFile::parse() {
   return std::error_code();
 }
 
-std::error_code BitcodeFile::parse() {
+std::error_code BitcodeFile::doParse() {
   std::string Err;
   M.reset(LTOModule::createFromBuffer(MB.getBufferStart(),
                                       MB.getBufferSize(),

@@ -17,6 +17,7 @@
 #include "llvm/Object/COFF.h"
 #include "llvm/Support/StringSaver.h"
 #include <memory>
+#include <mutex>
 #include <set>
 #include <vector>
 
@@ -48,8 +49,8 @@ public:
   virtual std::vector<SymbolBody *> &getSymbols() = 0;
 
   // Reads a file (constructors don't do that). Returns an error if a
-  // file is broken.
-  virtual std::error_code parse() = 0;
+  // file is broken. This function is idempotent.
+  std::error_code parse();
 
   // Returns a short, human-friendly filename. If this is a member of
   // an archive file, a returned value includes parent's filename.
@@ -71,12 +72,16 @@ protected:
   InputFile(Kind K, MemoryBufferRef M)
       : Index(NextIndex++), MB(M), FileKind(K) {}
 
+  virtual std::error_code doParse() = 0;
+
   MemoryBufferRef MB;
   std::string Directives;
 
 private:
   const Kind FileKind;
   StringRef ParentName;
+  std::error_code ParseError;
+  std::once_flag Once;
 };
 
 // .lib or .a file.
@@ -84,7 +89,6 @@ class ArchiveFile : public InputFile {
 public:
   explicit ArchiveFile(MemoryBufferRef M) : InputFile(ArchiveKind, M) {}
   static bool classof(const InputFile *F) { return F->kind() == ArchiveKind; }
-  std::error_code parse() override;
 
   // Returns a memory buffer for a given symbol. An empty memory buffer
   // is returned if we have already returned the same memory buffer.
@@ -99,6 +103,8 @@ public:
   }
 
 private:
+  std::error_code doParse() override;
+
   std::unique_ptr<Archive> File;
   std::string Filename;
   std::vector<Lazy *> LazySymbols;
@@ -111,7 +117,6 @@ class ObjectFile : public InputFile {
 public:
   explicit ObjectFile(MemoryBufferRef M) : InputFile(ObjectKind, M) {}
   static bool classof(const InputFile *F) { return F->kind() == ObjectKind; }
-  std::error_code parse() override;
   std::vector<Chunk *> &getChunks() { return Chunks; }
   std::vector<SymbolBody *> &getSymbols() override { return SymbolBodies; }
 
@@ -125,6 +130,7 @@ public:
   COFFObjectFile *getCOFFObj() { return COFFObj.get(); }
 
 private:
+  std::error_code doParse() override;
   std::error_code initializeChunks();
   std::error_code initializeSymbols();
 
@@ -167,7 +173,7 @@ public:
   std::vector<SymbolBody *> &getSymbols() override { return SymbolBodies; }
 
 private:
-  std::error_code parse() override;
+  std::error_code doParse() override;
 
   std::vector<SymbolBody *> SymbolBodies;
   llvm::BumpPtrAllocator Alloc;
@@ -186,7 +192,7 @@ public:
   LTOModule *releaseModule() { return M.release(); }
 
 private:
-  std::error_code parse() override;
+  std::error_code doParse() override;
 
   std::vector<SymbolBody *> SymbolBodies;
   llvm::BumpPtrAllocator Alloc;
