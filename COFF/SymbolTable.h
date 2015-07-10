@@ -11,6 +11,8 @@
 #define LLD_COFF_SYMBOL_TABLE_H
 
 #include "InputFiles.h"
+#include "StringMap.h"
+#include "Symbols.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/Support/Allocator.h"
@@ -85,6 +87,8 @@ public:
   // A list of chunks which to be added to .rdata.
   std::vector<Chunk *> LocalImportChunks;
 
+  void dump() { Symtab.dump(); }
+
 private:
   std::error_code readArchives();
   std::error_code readObjects();
@@ -96,7 +100,7 @@ private:
   std::error_code addMemberFile(Lazy *Body);
   ErrorOr<ObjectFile *> createLTOObject(llvm::LTOCodeGenerator *CG);
 
-  llvm::DenseMap<StringRef, Symbol *> Symtab;
+  StringMap<Symbol> Symtab;
 
   std::vector<std::unique_ptr<InputFile>> Files;
   std::vector<ArchiveFile *> ArchiveQueue;

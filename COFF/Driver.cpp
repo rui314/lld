@@ -690,6 +690,8 @@ bool LinkerDriver::link(llvm::ArrayRef<const char *> ArgsArr) {
     return false;
   }
 
+  // Symtab.dump();
+
   // Create a symbol map file containing symbol VAs and their names
   // to help debugging.
   if (auto *Arg = Args.getLastArg(OPT_lldmap)) {

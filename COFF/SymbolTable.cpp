@@ -124,7 +124,7 @@ bool SymbolTable::queueEmpty() {
 
 bool SymbolTable::reportRemainingUndefines(bool Resolve) {
   llvm::SmallPtrSet<SymbolBody *, 8> Undefs;
-  for (auto &I : Symtab) {
+  for (auto I : Symtab) {
     Symbol *Sym = I.second;
     auto *Undef = dyn_cast<Undefined>(Sym->Body);
     if (!Undef)
@@ -230,12 +230,8 @@ std::error_code SymbolTable::addSymbol(SymbolBody *New) {
 }
 
 Symbol *SymbolTable::insert(SymbolBody *New) {
-  Symbol *&Sym = Symtab[New->getName()];
-  if (Sym) {
-    New->setBackref(Sym);
-    return Sym;
-  }
-  Sym = new (Alloc) Symbol(New);
+  auto Pair = Symtab.emplace(New->getName(), New);
+  Symbol *Sym = (*Pair.first).second;
   New->setBackref(Sym);
   return Sym;
 }
@@ -271,7 +267,7 @@ Symbol *SymbolTable::find(StringRef Name) {
   auto It = Symtab.find(Name);
   if (It == Symtab.end())
     return nullptr;
-  return It->second;
+  return (*It).second;
 }
 
 void SymbolTable::mangleMaybe(Undefined *U) {
