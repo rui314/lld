@@ -23,6 +23,7 @@ using namespace llvm;
 using namespace llvm::object;
 using namespace llvm::support::endian;
 using namespace llvm::COFF;
+using llvm::support::ulittle32_t;
 
 namespace lld {
 namespace coff {
@@ -135,6 +136,8 @@ void SectionChunk::getBaserels(std::vector<uint32_t> *Res) {
       continue;
     SymbolBody *Body = File->getSymbolBody(Rel.SymbolTableIndex)->repl();
     if (isa<DefinedAbsolute>(Body))
+      continue;
+    if (Body->getName() == "___safe_se_handler_count")
       continue;
     Res->push_back(RVA + Rel.VirtualAddress);
   }
@@ -278,6 +281,14 @@ void LocalImportChunk::writeTo(uint8_t *Buf) {
   } else {
     write32le(Buf + FileOff, Sym->getRVA() + Config->ImageBase);
   }
+}
+
+void SEHTableChunk::writeTo(uint8_t *Buf) {
+  ulittle32_t *Begin = reinterpret_cast<ulittle32_t *>(Buf + FileOff);
+  size_t Cnt = 0;
+  for (Defined *D : Syms)
+    Begin[Cnt++] = D->getRVA();
+  std::sort(Begin, Begin + Cnt);
 }
 
 // Windows-specific.
